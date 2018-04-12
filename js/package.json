@@ -1,0 +1,18 @@
+{
+  "version": "0.0.0",
+  "private": true,
+  "name": "restclient",
+  "description": "OpenMRS interface scripts",
+  "license": "MIT",
+  "dependencies": {
+    "Q": "^1.0.0",
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.8.5",
+    "luhn-mod-n": "^1.0.1",
+    "mysql": "^2.15.0",
+    "node-random-name": "^1.0.1",
+    "random-name": "^0.1.2",
+    "request": "^2.85.0",
+    "request-promise": "^4.2.2"
+  }
+}

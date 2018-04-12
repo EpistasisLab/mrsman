@@ -1,0 +1,15 @@
+#initialize
+mvn org.openmrs.maven.plugins:openmrs-sdk-maven-plugin:setup-sdk
+
+#delete an existing server
+mvn openmrs-sdk:delete
+
+
+#create a new server
+mvn openmrs-sdk:setup
+
+#create a new project
+mvn openmrs-sdk:create-project
+
+#bring up a server
+mvn clean install openmrs-sdk:run
