@@ -8,7 +8,7 @@ jdk1.6+
 
 ## installation
 ### preparing source records
-- download 100,000-patient artificial EMR database from [emrbots] (http://www.emrbots.org/)
+- download 100,000-patient artificial EMR database from emrbots (http://www.emrbots.org/)
 - load records into empty db by running sequential import scripts
 ```bash
 cd sql/ 
