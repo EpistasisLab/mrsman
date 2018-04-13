@@ -1,5 +1,4 @@
 package org.epistasis.pennvibe.fhirplug;
-
 import org.hl7.fhir.dstu3.model.Bundle;
 import org.hl7.fhir.dstu3.model.Bundle.BundleType;
 import org.hl7.fhir.dstu3.model.Bundle.HTTPVerb;
@@ -12,6 +11,7 @@ import org.hl7.fhir.dstu3.model.Reference;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.primitive.IdDt;
+import ca.uhn.fhir.okhttp.client.OkHttpRestfulClientFactory;
 import ca.uhn.fhir.rest.client.api.IClientInterceptor;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.api.IRestfulClientFactory;
@@ -88,7 +88,7 @@ public class App
               .setMethod(HTTPVerb.POST);
          
         // Log the request
-        FhirContext ctx = FhirContext.forDstu2();
+        FhirContext ctx = FhirContext.forDstu3();
         
         
        // IRestfulClientFactory clientFactory = ctx.getRestfulClientFactory();
@@ -98,7 +98,11 @@ public class App
      String password = "Admin123";
      IClientInterceptor authInterceptor = new BasicAuthInterceptor(username, password);
      
-   
+  // Use OkHttp
+     ctx.setRestfulClientFactory(new OkHttpRestfulClientFactory(ctx));
+      
+     // Create the client
+//     IGenericClient client = ctx.newRestfulGenericClient("http://localhost:9999/fhir");
         
         
  //       System.out.println(ctx.newXmlParser().setPrettyPrint(true).encodeResourceToString(bundle));
