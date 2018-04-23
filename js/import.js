@@ -17,19 +17,24 @@ const fs = require('fs')
 const transform = require('stream-transform');
 const csv = require("fast-csv");
 
+var gui = false;
 
 // configs
 var config = require('./config');
 
 // globals
 //number of cuncurrent http requests
-const poolsize = 10;
+const stepsize = 100;
 //
 //number of records proccessed
 var count = 0;
 //number of failed requests
 var failcount = 0;
+//number of failed requests
+var successcount = 0;
 
+
+if(gui) {
 //ui 
 var screen = blessed.screen()
 var grid = new contrib.grid({
@@ -67,13 +72,33 @@ screen.on('resize', function() {
     gauge.emit('attach');
     log.emit('attach');
 });
+var setGuage = function(percent_success,percent_fail,percent_left) {
+    gauge.setStack(
+        [{
+                percent: percent_success,
+                stroke: 'green'
+            },
+            {
+                percent: percent_fail,
+                stroke: 'magenta'
+            },
+            {
+                percent: percent_left,
+                stroke: 'cyan'
+            }
+        ]);
+}
 screen.render()
+} else {
+var setGuage = function(percent_success,percent_fail,percent_left) {
+}
+}
 
 var fhirPatient = function(record) {
     var gender = record.PatientGender.toLowerCase();
     var identifier = record.PatientID.toLowerCase()
     var birthdate = new Date(record.PatientDateOfBirth).toISOString().substr(0, 10);
-    var id = record.PatientID.substring(0, 8).replace(/B/g, 'H');
+    var id = record.PatientID.substring(0, 7).replace(/B/g, 'H');
     var OpenMRSID = id + luhn.generateCheckCharacter(id, '0123456789ACDEFGHJKLMNPRTUVWXY');
     var givenName = randomname({
         random: Math.random,
@@ -145,49 +170,35 @@ csv
    .pipe(formatStream)
 */
 function httpRequest(count) {
-    if (count == undefined) {
-        count = 0
-    }
-    count++
-    var percent_success = ((count - failcount) / output.length).toFixed(2);
-    var percent_fail = (failcount / output.length).toFixed(2);
-    var percent_left = ((output.length - count) / output.length).toFixed(2);
-    gauge.setStack(
-        [{
-                percent: percent_success,
-                stroke: 'green'
-            },
-            {
-                percent: percent_fail,
-                stroke: 'magenta'
-            },
-            {
-                percent: percent_left,
-                stroke: 'cyan'
-            }
-        ]);
+var promises = new Array(stepsize);
     if (count > output.length) {
         return
+    } else if (count == undefined) {
+        count = 0
     }
-
-
-
-
-
-    var patient = output[count];
-    var p = importPatient(patient);
-    p.then(function(parsedBody) {
-            log.log('success')
-            sequentialRequest(count);
-            // POST succeeded...
-        })
-        .catch(function(err) {
+///    var percent_success = ((count - failcount) / output.length).toFixed(2);
+//    var percent_fail = (failcount / output.length).toFixed(2);
+//    var percent_left = ((output.length - count) / output.length).toFixed(2);
+for (var i = 0; i < stepsize; i++) { 
+    var patient = output[count + i];
+    promises[i] = importPatient(patient);
+}
+Q.allSettled(promises)
+.then(function (results) {
+    results.forEach(function (result) {
+console.log(result);
+        if (result.state === "fulfilled") {
+            successcount++
+            //var value = result.value;
+        } else {
+            //var reason = result.reason;
             failcount++
-            log.log('fail')
-            httpRequest(count);
-        });
-
-
+        }
+    });
+console.log({count,stepsize});
+console.log({successcount,failcount});
+httpRequest(count + stepsize);
+});
 
 }
 
