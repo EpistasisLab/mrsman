@@ -17,83 +17,92 @@ const fs = require('fs')
 const transform = require('stream-transform');
 const csv = require("fast-csv");
 
-var gui = false;
-
 // configs
 var config = require('./config');
 
 // globals
+//show the gui
+var gui = false;
+
 //number of cuncurrent http requests
 const stepsize = 100;
-//
+
 //number of records proccessed
 var count = 0;
+
 //number of failed requests
 var failcount = 0;
-//number of failed requests
+
+//number of successful requests
 var successcount = 0;
 
 
-if(gui) {
-//ui 
-var screen = blessed.screen()
-var grid = new contrib.grid({
-    rows: 12,
-    cols: 12,
-    screen: screen
-})
-var gauge = grid.set(0, 0, 4, 12, contrib.gauge, {
-    label: 'Progress',
-    stroke: 'green',
-    fill: 'white'
-});
-screen.append(gauge);
-gauge.setPercent(0)
-gauge.setStack([{
-    percent: 0,
-    stroke: 'green'
-}, {
-    percent: 0,
-    stroke: 'magenta'
-}, {
-    percent: 100,
-    stroke: 'cyan'
-}])
-var log = grid.set(4, 1, 4, 10, contrib.log, {
-    fg: "green",
-    selectedFg: "green",
-    label: 'Status'
-});
-screen.append(log);
-screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-    return process.exit(0);
-});
-screen.on('resize', function() {
-    gauge.emit('attach');
-    log.emit('attach');
-});
-var setGuage = function(percent_success,percent_fail,percent_left) {
-    gauge.setStack(
-        [{
-                percent: percent_success,
-                stroke: 'green'
-            },
-            {
-                percent: percent_fail,
-                stroke: 'magenta'
-            },
-            {
-                percent: percent_left,
-                stroke: 'cyan'
-            }
-        ]);
-}
-screen.render()
+
+
+
+if (gui) {
+    //ui 
+    var screen = blessed.screen()
+    var grid = new contrib.grid({
+        rows: 12,
+        cols: 12,
+        screen: screen
+    })
+    var gauge = grid.set(0, 0, 4, 12, contrib.gauge, {
+        label: 'Progress',
+        stroke: 'green',
+        fill: 'white'
+    });
+    screen.append(gauge);
+    gauge.setPercent(0)
+    gauge.setStack([{
+        percent: 0,
+        stroke: 'green'
+    }, {
+        percent: 0,
+        stroke: 'magenta'
+    }, {
+        percent: 100,
+        stroke: 'cyan'
+    }])
+    var log = grid.set(4, 1, 4, 10, contrib.log, {
+        fg: "green",
+        selectedFg: "green",
+        label: 'Status'
+    });
+    screen.append(log);
+    screen.key(['escape', 'q', 'C-c'], function(ch, key) {
+        return process.exit(0);
+    });
+    screen.on('resize', function() {
+        gauge.emit('attach');
+        log.emit('attach');
+    });
+    var setGuage = function(percent_success, percent_fail, percent_left) {
+        gauge.setStack(
+            [{
+                    percent: percent_success,
+                    stroke: 'green'
+                },
+                {
+                    percent: percent_fail,
+                    stroke: 'magenta'
+                },
+                {
+                    percent: percent_left,
+                    stroke: 'cyan'
+                }
+            ]);
+    }
+    screen.render()
 } else {
-var setGuage = function(percent_success,percent_fail,percent_left) {
-}
+    var setGuage = function(percent_success, percent_fail, percent_left) {}
+    var log = console;
 }
 
+
+
+//convert patien to fhir syntax
 var fhirPatient = function(record) {
     var gender = record.PatientGender.toLowerCase();
     var identifier = record.PatientID.toLowerCase()
@@ -133,77 +142,59 @@ var fhirPatient = function(record) {
 }
 
 
-var importPatient = function(patient) {
-    var options = {
-        method: 'POST',
-        uri: config.url,
-        headers: {
+function httpRequest(count,resource) {
+    var postRecord = function(record) {
+        var options = {
+            method: 'POST',
+            uri: config.url + resource,
+            headers: {
             "Authorization": config.auth
-        },
-        json: patient // Automatically stringifies the body to JSON
-    };
-    var promise = rp(options)
-    return (promise);
-}
+            },
+            json: record // Automatically stringifies the body to JSON
+        };
+        var promise = rp(options)
+        return (promise);
+    }
 
-var to = 100;
-var from = 0;
-var output = [];
-//var parser = parse({delimiter: '\t',to: to,from: from})
-//var filename = '../data/PatientCorePopulatedTable_short.txt';
-var filename = '../data/PatientCorePopulatedTable.txt';
-//input.pipe(parser).pipe(transformer).pipe(process.stdout);
-//var input = '#Welcome\n"1","2","3","4"\n"a","b","c","d"';
-//console.log(output);
-//parse(input, {delimiter: '\t',to: to,from: from}, function(err, output){
-//});
-
-/*
-var formatStream = csv
-        .createWriteStream({headers: true})
-        .transform(function(obj){
-            var patient=formatPatient(obj);
-            return patient;
-        });
-csv
-   .fromPath(filename, {headers: true, delimiter: '\t'})
-   .pipe(formatStream)
-*/
-function httpRequest(count) {
-var promises = new Array(stepsize);
-    if (count > output.length) {
+    var promises = new Array(stepsize);
+    if (count > output[resource].length) {
         return
     } else if (count == undefined) {
         count = 0
     }
-///    var percent_success = ((count - failcount) / output.length).toFixed(2);
-//    var percent_fail = (failcount / output.length).toFixed(2);
-//    var percent_left = ((output.length - count) / output.length).toFixed(2);
-for (var i = 0; i < stepsize; i++) { 
-    var patient = output[count + i];
-    promises[i] = importPatient(patient);
+    for (var i = 0; i < stepsize; i++) {
+        var record = output[resource][count + i];
+        promises[i] = postRecord(record);
+    }
+    Q.allSettled(promises)
+        .then(function(results) {
+            results.forEach(function(result) {
+                if (result.state === "fulfilled") {
+                    successcount++
+                    //var value = result.value;
+                } else {
+                    //var reason = result.reason;
+                    failcount++
+                }
+            });
+            log.log({
+                count,
+                stepsize
+            });
+            log.log({
+                successcount,
+                failcount
+            });
+            httpRequest(count + stepsize,resource);
+        });
 }
-Q.allSettled(promises)
-.then(function (results) {
-    results.forEach(function (result) {
-console.log(result);
-        if (result.state === "fulfilled") {
-            successcount++
-            //var value = result.value;
-        } else {
-            //var reason = result.reason;
-            failcount++
-        }
-    });
-console.log({count,stepsize});
-console.log({successcount,failcount});
-httpRequest(count + stepsize);
-});
-
-}
 
 
-var stream = fs.createReadStream(filename);
+var streamResource = function(resource) {
+    var filename = config.files[resource]
+    var stream = fs.createReadStream(filename);
+    output[resource] = {}
+
 csv
     .fromStream(stream, {
         headers: true,
@@ -217,18 +208,15 @@ csv
         return data.resourceType !== undefined; //all persons must be under the age of 50
     })
     .on("data-invalid", function(data) {
-        //do something with invalid row
+        log.log("invalid data")
     })
     .on("data", function(data) {
-        //importPatient(data);
-        output.push(data);
+        output[resource].push(data);
     })
     .on("end", function() {
         console.log("done");
-        total = output.length;
+        total = output[resource].length;
         console.log("Running sequential requests!")
         httpRequest()
-
-
-
     });
+}
