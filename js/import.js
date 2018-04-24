@@ -102,201 +102,161 @@ if (gui) {
 }
 
 
+//convert record to fhir syntax based on resource type
+var resourceTrans = function(record, resource) {
+    var transformer = {}
+    transformer['Observation'] = observationTransformer;
+    return transformer[resource](record);
+}
 
-//convert patien to fhir syntax
+
+
+
+
+//convert record to fhir syntax based on resource type
 var fhirRecord = function(record, resource) {
     var checkstring = '0123456789ACDEFGHJKLMNPRTUVWXY'
     //generate a patient id using first 8 chars, replace 'B' with 'H'
     var id = record.PatientID.substring(0, 7).replace(/B/g, 'H');
     var OpenMRSID = id + luhn.generateCheckCharacter(id, checkstring);
     var formatter = {};
+    formatter['Patient'] = patientFormatter;
+    formatter['Encounter'] = encounterFormatter;
+    formatter['Observation'] = observationFormatter;
+    return formatter[resource](record);
+}
 
 
-    formatter['Patient'] = function() {
-        var gender = record.PatientGender.toLowerCase();
-        var identifier = record.PatientID.toLowerCase()
-        var birthdate = new Date(record.PatientDateOfBirth).toISOString().substr(0, 10);
-        var givenName = randomname({
-            random: Math.random,
-            first: true,
-            gender: gender
-        })
-        var familyName = randomname({
-            random: Math.random,
-            last: true
-        })
+var patientFormatter = function(record) {
+    var gender = record.PatientGender.toLowerCase();
+    var identifier = record.PatientID.toLowerCase()
+    var birthdate = new Date(record.PatientDateOfBirth).toISOString().substr(0, 10);
+    var givenName = randomname({
+        random: Math.random,
+        first: true,
+        gender: gender
+    })
+    var familyName = randomname({
+        random: Math.random,
+        last: true
+    })
 
-        return {
-            "resourceType": "Patient",
-            "identifier": [{
-                "use": "usual",
-                "system": "OpenMRS ID",
-                "value": OpenMRSID
-            }],
-            "name": [{
-                "use": "usual",
-                "family": familyName,
-                "given": [
-                    givenName
-                ]
-            }],
-            "gender": gender,
-            "birthDate": birthdate,
-            "deceasedBoolean": false,
-            "active": true
-        }
+    var patient = {
+        "resourceType": "Patient",
+        "identifier": [{
+            "use": "usual",
+            "system": "OpenMRS ID",
+            "value": OpenMRSID
+        }],
+        "name": [{
+            "use": "usual",
+            "family": familyName,
+            "given": [
+                givenName
+            ]
+        }],
+        "gender": gender,
+        "birthDate": birthdate,
+        "deceasedBoolean": false,
+        "active": true
     }
+    return patient;
+}
 
 
-    formatter['Encounter'] = function() {
-        var e1 =  {
-            "resourceType": "Encounter",
-            "type": [{
-                "coding": [{
-                    "display": "Vitals"
-                }]
-            }],
-            "subject": {
-                "id": "69f895f8-5929-4be4-8164-bd7fd581e19d",
-            },
-            "participant": [{
-                "individual": {
+var encounterFormatter = function(record) {
+    var encounter = {
+        "resourceType": "Encounter",
+        "type": [{
+            "coding": [{
+                "display": "Vitals"
+            }]
+        }],
+        "subject": {
+            "id": "69f895f8-5929-4be4-8164-bd7fd581e19d",
+        },
+        "participant": [{
+            "individual": {
                 "reference": "Practitioner/328797d7-196e-4344-9c12-6615bf26cc97",
-                }
-            }],
+            }
+        }],
+        "period": {
+            "start": "2018-04-23T10:58:10-04:00",
+            "end": "2018-04-23T10:58:10-04:00"
+        },
+        "location": [{
+            "location": {
+                "reference": "Location/b1a8b05e-3542-4037-bbd3-998ee9c40574",
+            },
             "period": {
                 "start": "2018-04-23T10:58:10-04:00",
                 "end": "2018-04-23T10:58:10-04:00"
-            },
-            "location": [{
-                "location": {
-                    "reference": "Location/b1a8b05e-3542-4037-bbd3-998ee9c40574",
-                },
-                "period": {
-                    "start": "2018-04-23T10:58:10-04:00",
-                    "end": "2018-04-23T10:58:10-04:00"
-                }
-            }],
-            "partOf": {
-                "reference": "Encounter/81df0058-6c93-4238-859d-8e63fee7766c",
             }
+        }],
+        "partOf": {
+            "reference": "Encounter/81df0058-6c93-4238-859d-8e63fee7766c",
         }
-return {
-  "resourceType": "Encounter",
-  "subject": {
-                "id": "f199a94a-a726-47b4-b660-15b45ded6045",
-  },
-
-"type": [
-    {
-      "coding": [
-        {
-          "code": "1",
-        }
-      ]
     }
-  ],
+    var visit = {
+        "resourceType": "Encounter",
+        "subject": {
+            "id": "f199a94a-a726-47b4-b660-15b45ded6045",
+        },
 
-  "period": {
-    "start": "2018-04-23T10:33:10-04:00"
-  },
-  "location": [
-    {
-      "location": {
-        "reference": "Location/aff27d58-a15c-49a6-9beb-d30dcfc0c66e",
-        "display": "Amani Hospital"
-      },
-      "period": {
-        "start": "2018-04-23T10:33:10-04:00"
-      }
-    }
-  ]
-}
-    }
-
-
-
-    formatter['Observation'] = function() {
-
-        return {
-            "resourceType": "Observation",
-            "code": {
-                "coding": [{
-                        "system": "http://loinc.org",
-                        "code": "8302-2"
-                    },
-                    {
-                        "system": "http://snomed.info/sct",
-                        "code": "50373000"
-                    },
-                    {
-                        "system": "http://ampath.com/",
-                        "code": "5090"
-                    },
-                    {
-                        "system": "http://www.pih.org/country/malawi",
-                        "code": "5090"
-                    },
-                    {
-                        "system": "http://ciel.org",
-                        "code": "5090"
-                    },
-                    {
-                        "system": "http://www.pih.org/",
-                        "code": "5090"
-                    },
-                    {
-                        "system": "http://openmrs.org",
-                        "code": "5090AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                        "display": "Height (cm)"
-                    }
-                ]
-            },
-            "subject": {
-                "id": "f199a94a-a726-47b4-b660-15b45ded6045",
-                "reference": "Patient/f199a94a-a726-47b4-b660-15b45ded6045",
-                "identifier": {
-                    "id": "f199a94a-a726-47b4-b660-15b45ded6045"
-                },
-            },
-            "effectiveDateTime": "2018-04-23T10:58:10-04:00",
-            "issued": "2018-04-23T10:58:20.000-04:00",
-            "performer": [{
-                "reference": "Practitioner/b15149e6-6e4e-4bfa-a5d6-5f9ae830e1d8",
-                "display": "Super User(Identifier:UNKNOWN)"
-            }],
-            "valueQuantity": {
-                "value": 101.0,
-                "unit": "cm",
-                "system": "http://unitsofmeasure.org",
-                "code": "cm"
-            },
-            "referenceRange": [{
-                "low": {
-                    "value": 10.0,
-                    "unit": "cm",
-                    "system": "http://unitsofmeasure.org",
-                    "code": "cm"
-                },
-                "high": {
-                    "value": 272.0,
-                    "unit": "cm",
-                    "system": "http://unitsofmeasure.org",
-                    "code": "cm"
-                }
+        "type": [{
+            "coding": [{
+                "code": "1",
             }]
-        }
+        }],
 
-
-
+        "period": {
+            "start": "2018-04-23T10:33:10-04:00"
+        },
+        "location": [{
+            "location": {
+                "reference": "Location/aff27d58-a15c-49a6-9beb-d30dcfc0c66e",
+                "display": "Amani Hospital"
+            },
+            "period": {
+                "start": "2018-04-23T10:33:10-04:00"
+            }
+        }]
     }
-
-    return formatter[resource]();
-
-
+    return visit;
 }
 
 
+
+observationFormatter = function(record) {
+    var observation = {
+        "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                "system": "http://openmrs.org",
+                "code": "3073f2ec-e632-4e47-a9e2-797fdae81452",
+            }]
+        },
+        "subject": {
+            "id": "2da6e30b-ff28-4788-87b9-8b7b59e986c1",
+        },
+        "effectiveDateTime": "2018-04-23T14:04:10-04:00",
+        "valueQuantity": {
+            "value": 15.4,
+        }
+    }
+    return observation;
+}
+
+
+
+var observationTransformer = function(record) {
+    //var catandname = record['LabName'].split(": ");
+    //var lab_name = catandname[1];
+    delete record['PatientID'];
+    delete record['AdmissionID'];
+    delete record['LabDateTime'];
+    return record;
+}
 
 
 
@@ -331,7 +291,7 @@ function httpRequest(resource, count) {
     Q.allSettled(promises)
         .then(function(results) {
             results.forEach(function(result) {
-console.log(JSON.stringify(result));
+                //console.log(JSON.stringify(result));
                 if (result.state === "fulfilled") {
                     successcount++
                     //var value = result.value;
@@ -352,7 +312,6 @@ console.log(JSON.stringify(result));
         });
 }
 
-
 var importResource = function(resource) {
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
@@ -363,11 +322,11 @@ var importResource = function(resource) {
             delimiter: '\t'
         })
         .transform(function(obj) {
-            var patient = fhirRecord(obj,resource);
-            return patient;
+            var transformed = fhirRecord(obj, resource);
+            return transformed;
         })
         .validate(function(data) {
-            return data.resourceType !== undefined; //all persons must be under the age of 50
+            return data.resourceType !== undefined; //resources need type
         })
         .on("data-invalid", function(data) {
             log.log("invalid data")
@@ -382,6 +341,53 @@ var importResource = function(resource) {
             httpRequest(resource)
         });
 }
+
+var genConcepts = function(source, destination) {
+    var readfile = config.files[source]
+    var writefile = config.files[destination]
+    var readstream = fs.createReadStream(readfile);
+    var writestream = fs.createWriteStream(writefile);
+    var concepts = {}
+    csv
+        .fromStream(readstream, {
+            headers: true,
+            delimiter: '\t'
+        })
+        .transform(function(obj) {
+            var transformed = resourceTrans(obj, resource);
+            return transformed;
+        })
+        .validate(function(data) {
+            return data.LabName !== undefined; //todo
+        })
+        .on("data-invalid", function(data) {
+            log.log("invalid data")
+        })
+        .on("data", function(data) {
+            if (concepts[data.LabName] === undefined) {
+                concepts[data.LabName] = data;
+            } else if (concepts[data.LabName]['min'] === undefined) {
+                concepts[data.LabName]['min'] = data['LabValue'];
+            } else if (concepts[data.LabName]['max'] === undefined) {
+                concepts[data.LabName]['max'] = data['LabValue'];
+            } else if (concepts[data.LabName]['min'] > data['LabValue']) {
+                concepts[data.LabName]['min'] = data['LabValue'];
+            } else if (concepts[data.LabName]['max'] < data['LabValue']) {
+                concepts[data.LabName]['max'] = data['LabValue'];
+            }
+        })
+        .on("end", function() {
+            console.log("done");
+            for (concept in concepts) {
+                console.log(concept);
+            }
+
+        });
+}
+
+
+genConcepts('Observation', 'Concept');
+
 //importResource('Patient');
+//importResource('Observation');
 //importResource('Encounter');
-importResource('Observation');
