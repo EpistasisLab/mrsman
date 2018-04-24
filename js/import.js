@@ -24,6 +24,9 @@ var config = require('./config');
 //show the gui
 var gui = false;
 
+
+const checkstring = '0123456789ACDEFGHJKLMNPRTUVWXY'
+
 //number of cuncurrent http requests
 const stepsize = 100;
 
@@ -114,20 +117,23 @@ var resourceTrans = function(record, resource) {
 
 
 //convert record to fhir syntax based on resource type
-var fhirRecord = function(record, resource) {
-    var checkstring = '0123456789ACDEFGHJKLMNPRTUVWXY'
-    //generate a patient id using first 8 chars, replace 'B' with 'H'
-    var id = record.PatientID.substring(0, 7).replace(/B/g, 'H');
-    var OpenMRSID = id + luhn.generateCheckCharacter(id, checkstring);
-    var formatter = {};
-    formatter['Patient'] = patientFormatter;
-    formatter['Encounter'] = encounterFormatter;
-    formatter['Observation'] = observationFormatter;
-    return formatter[resource](record);
+var transformRecord = function(record, resource) {
+    if (resource == 'Patient') {
+        var formatter = patientFormatter;
+    } else if (resource == 'Encounter') {
+        var formatter = encounterFormatter;
+    } else if (resource == 'Observation') {
+        var formatter = observationFormatter;
+    } else if (resource == 'Concept') {
+        var formatter = conceptFormatter;
+    }
+    return formatter(record);
 }
 
 
 var patientFormatter = function(record) {
+    var id = record.PatientID.substring(0, 7).replace(/B/g, 'H');
+    var OpenMRSID = id + luhn.generateCheckCharacter(id, checkstring);
     var gender = record.PatientGender.toLowerCase();
     var identifier = record.PatientID.toLowerCase()
     var birthdate = new Date(record.PatientDateOfBirth).toISOString().substr(0, 10);
@@ -247,6 +253,177 @@ observationFormatter = function(record) {
     return observation;
 }
 
+conceptFormatter = function(record) {
+    var concept = {
+        "uuid": "3073f2ec-e632-4e47-a9e2-797fdae81452",
+        "display": "Hemoglobin",
+        "name": {
+            "display": "Hemoglobin",
+            "uuid": "524f5641-4477-44a5-80d7-0be98144f000",
+            "name": "Hemoglobin",
+            "locale": "en",
+            "localePreferred": true,
+            "conceptNameType": "FULLY_SPECIFIED",
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000?v=full"
+            }],
+            "resourceVersion": "1.9"
+        },
+        "datatype": {
+            "uuid": "8d4a4488-c2cc-11de-8d13-0010c6dffd0f",
+            "display": "Numeric",
+            "name": "Numeric",
+            "description": "Numeric value, including integer or float (e.g., creatinine, weight)",
+            "hl7Abbreviation": "NM",
+            "retired": false,
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptdatatype/8d4a4488-c2cc-11de-8d13-0010c6dffd0f"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptdatatype/8d4a4488-c2cc-11de-8d13-0010c6dffd0f?v=full"
+            }],
+            "resourceVersion": "1.8"
+        },
+        "conceptClass": {
+            "uuid": "8d4907b2-c2cc-11de-8d13-0010c6dffd0f",
+            "display": "Test",
+            "name": "Test",
+            "description": "Acq. during patient encounter (vitals, labs, etc.)",
+            "retired": false,
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptclass/8d4907b2-c2cc-11de-8d13-0010c6dffd0f"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptclass/8d4907b2-c2cc-11de-8d13-0010c6dffd0f?v=full"
+            }],
+            "resourceVersion": "1.8"
+        },
+        "set": false,
+        "version": null,
+        "retired": false,
+        "names": [{
+            "display": "Hemoglobin",
+            "uuid": "524f5641-4477-44a5-80d7-0be98144f000",
+            "name": "Hemoglobin",
+            "locale": "en",
+            "localePreferred": true,
+            "conceptNameType": "FULLY_SPECIFIED",
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000?v=full"
+            }],
+            "resourceVersion": "1.9"
+        }, {
+            "display": "glob",
+            "uuid": "f49d97e8-bd61-4b43-8cfb-155da2fd5e55",
+            "name": "glob",
+            "locale": "en",
+            "localePreferred": false,
+            "conceptNameType": null,
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/f49d97e8-bd61-4b43-8cfb-155da2fd5e55"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/f49d97e8-bd61-4b43-8cfb-155da2fd5e55?v=full"
+            }],
+            "resourceVersion": "1.9"
+        }, {
+            "display": "Hgb",
+            "uuid": "7dea657a-612f-4eb0-bfbd-cc232c340900",
+            "name": "Hgb",
+            "locale": "en",
+            "localePreferred": false,
+            "conceptNameType": "SHORT",
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/7dea657a-612f-4eb0-bfbd-cc232c340900"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/7dea657a-612f-4eb0-bfbd-cc232c340900?v=full"
+            }],
+            "resourceVersion": "1.9"
+        }, {
+            "display": "heme",
+            "uuid": "be9652d5-816d-4dfb-8dc2-cf6fe0a3d974",
+            "name": "heme",
+            "locale": "en",
+            "localePreferred": false,
+            "conceptNameType": null,
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/be9652d5-816d-4dfb-8dc2-cf6fe0a3d974"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/be9652d5-816d-4dfb-8dc2-cf6fe0a3d974?v=full"
+            }],
+            "resourceVersion": "1.9"
+        }],
+        "descriptions": [{
+            "display": "blood hemoglobin",
+            "uuid": "f72fa0af-ac07-42fe-8f8d-0b5b6ee6ae5d",
+            "description": "blood hemoglobin",
+            "locale": "en",
+            "links": [{
+                "rel": "self",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/description/f72fa0af-ac07-42fe-8f8d-0b5b6ee6ae5d"
+            }, {
+                "rel": "full",
+                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/description/f72fa0af-ac07-42fe-8f8d-0b5b6ee6ae5d?v=full"
+            }],
+            "resourceVersion": "1.9"
+        }],
+        "mappings": [],
+        "answers": [],
+        "setMembers": [],
+        "auditInfo": {
+            "creator": {
+                "uuid": "1c3db49d-440a-11e6-a65c-00e04c680037",
+                "display": "admin",
+                "links": [{
+                    "rel": "self",
+                    "uri": "http://localhost:8090/openmrs/ws/rest/v1/user/1c3db49d-440a-11e6-a65c-00e04c680037"
+                }]
+            },
+            "dateCreated": "2018-04-23T15:48:53.000-0400",
+            "changedBy": {
+                "uuid": "1c3db49d-440a-11e6-a65c-00e04c680037",
+                "display": "admin",
+                "links": [{
+                    "rel": "self",
+                    "uri": "http://localhost:8090/openmrs/ws/rest/v1/user/1c3db49d-440a-11e6-a65c-00e04c680037"
+                }]
+            },
+            "dateChanged": "2018-04-24T13:20:34.000-0400"
+        },
+        "hiNormal": 18.0,
+        "hiAbsolute": 20.0,
+        "hiCritical": 19.0,
+        "lowNormal": 10.0,
+        "lowAbsolute": 1.0,
+        "lowCritical": 5.0,
+        "units": "gm/dl",
+        "allowDecimal": true,
+        "displayPrecision": null,
+        "attributes": [],
+        "links": [{
+            "rel": "self",
+            "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452"
+        }],
+        "resourceVersion": "2.0"
+    }
+
+    return concept;
+}
 
 
 var observationTransformer = function(record) {
@@ -260,13 +437,11 @@ var observationTransformer = function(record) {
 
 
 
-
-
-function httpRequest(resource, count) {
+function restRequest(resource, count) {
     var postRecord = function(record) {
         var options = {
             method: 'POST',
-            uri: config.url + '/' + resource,
+            uri: config.url + '/rest/v1/' + resource.toLowerCase(),
             headers: {
                 "Authorization": config.auth
             },
@@ -308,11 +483,10 @@ function httpRequest(resource, count) {
                 successcount,
                 failcount
             });
-            httpRequest(resource, count + stepsize);
+            restRequest(resource, count + stepsize);
         });
 }
-
-var importResource = function(resource) {
+var importRestResource = function(resource) {
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
     output[resource] = []
@@ -322,7 +496,89 @@ var importResource = function(resource) {
             delimiter: '\t'
         })
         .transform(function(obj) {
-            var transformed = fhirRecord(obj, resource);
+            var transformed = transformRecord(obj, resource);
+            return transformed;
+        })
+        //        .validate(function(data) {
+        //            return data.resourceType !== undefined; //resources need type
+        //        })
+        //        .on("data-invalid", function(data) {
+        //            log.log("invalid data")
+        //        })
+        .on("data", function(data) {
+            console.log(data);
+            output[resource].push(data);
+        })
+        .on("end", function() {
+            console.log("done");
+            console.log("Running sequential requests!")
+            //restRequest(resource)
+        });
+}
+
+
+
+function fhirRequest(resource, count) {
+    var postRecord = function(record) {
+        var options = {
+            method: 'POST',
+            uri: config.url + '/fhir/' + resource,
+            headers: {
+                "Authorization": config.auth
+            },
+            json: record // Automatically stringifies the body to JSON
+        };
+        var promise = rp(options)
+        return (promise);
+    }
+
+    var promises = new Array(stepsize);
+    if (count > output[resource].length) {
+        return
+    } else if (count == undefined) {
+        count = 0
+    }
+    for (var i = 0; i < stepsize; i++) {
+        var record = output[resource][count + i];
+        if (record) {
+            promises[i] = postRecord(record);
+        }
+    }
+    Q.allSettled(promises)
+        .then(function(results) {
+            results.forEach(function(result) {
+                //console.log(JSON.stringify(result));
+                if (result.state === "fulfilled") {
+                    successcount++
+                    //var value = result.value;
+                } else {
+                    //var reason = result.reason;
+                    failcount++
+                }
+            });
+            log.log({
+                count,
+                stepsize
+            });
+            log.log({
+                successcount,
+                failcount
+            });
+            fhirRequest(resource, count + stepsize);
+        });
+}
+
+var importFhirResource = function(resource) {
+    var filename = config.files[resource]
+    var stream = fs.createReadStream(filename);
+    output[resource] = []
+    csv
+        .fromStream(stream, {
+            headers: true,
+            delimiter: '\t'
+        })
+        .transform(function(obj) {
+            var transformed = transformRecord(obj, resource);
             return transformed;
         })
         .validate(function(data) {
@@ -336,9 +592,8 @@ var importResource = function(resource) {
         })
         .on("end", function() {
             console.log("done");
-            total = output[resource].length;
             console.log("Running sequential requests!")
-            httpRequest(resource)
+            fhirRequest(resource)
         });
 }
 
@@ -347,14 +602,34 @@ var genConcepts = function(source, destination) {
     var writefile = config.files[destination]
     var readstream = fs.createReadStream(readfile);
     var writestream = fs.createWriteStream(writefile);
+    var csvStream = csv.createWriteStream({
+        headers: true,
+        delimiter: '\t'
+    });
     var concepts = {}
+    var total = 0;
+    var deferred = Q.defer();
+    var formatter = function(input) {
+        var assay = input['LabName'].split(': ');
+        var name = assay[1].toLowerCase();
+        var system = assay[0].toLowerCase();
+        return {
+            'LabName': input['LabName'],
+            'name': name,
+            'system': system,
+            'units': input['LabUnits'],
+            'min': input['min'],
+            'max': input['max'],
+        }
+    }
+    log.log("reading" + readfile)
     csv
         .fromStream(readstream, {
             headers: true,
             delimiter: '\t'
         })
         .transform(function(obj) {
-            var transformed = resourceTrans(obj, resource);
+            var transformed = resourceTrans(obj, source);
             return transformed;
         })
         .validate(function(data) {
@@ -375,19 +650,35 @@ var genConcepts = function(source, destination) {
             } else if (concepts[data.LabName]['max'] < data['LabValue']) {
                 concepts[data.LabName]['max'] = data['LabValue'];
             }
+            total++;
+            if (total % 100000 === 0) {
+                log.log("processed " + total);
+            }
         })
         .on("end", function() {
-            console.log("done");
-            for (concept in concepts) {
-                console.log(concept);
+            log.log("done reading " + readfile);
+            log.log("start writing " + writefile)
+            csvStream.pipe(writestream);
+            for (LabName in concepts) {
+                var concept = formatter(concepts[LabName])
+                concepts[LabName] = concept;
+                csvStream.write(concept);
             }
-
+            csvStream.end();
+            writestream.on("finish", function() {
+                log.log("done writing " + writefile);
+                deferred.resolve();
+            });
         });
+    return deferred.promise;
 }
 
 
-genConcepts('Observation', 'Concept');
+//genConcepts('Observation', 'Concept').done(function() {
+//    log.log('press escape');
+//});;
 
-//importResource('Patient');
-//importResource('Observation');
-//importResource('Encounter');
+//importFhirResource('Patient');
+//importFhirResource('Observation');
+//importFhirResource('Encounter');
+importRestResource('Concept');
