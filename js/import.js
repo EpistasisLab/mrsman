@@ -16,6 +16,8 @@ const contrib = require('blessed-contrib');
 const fs = require('fs')
 const transform = require('stream-transform');
 const csv = require("fast-csv");
+const uuidv4 = require('uuid/v4');
+const mysql = require('mysql');
 
 // configs
 var config = require('./config');
@@ -103,6 +105,36 @@ if (gui) {
     var setGuage = function(percent_success, percent_fail, percent_left) {}
     var log = console;
 }
+
+function twoDigits(d) {
+    if (0 <= d && d < 10) return "0" + d.toString();
+    if (-10 < d && d < 0) return "-0" + (-1 * d).toString();
+    return d.toString();
+}
+
+Date.prototype.toMysqlFormat = function() {
+    return this.getUTCFullYear() + "-" + twoDigits(1 + this.getUTCMonth()) + "-" + twoDigits(this.getUTCDate()) + " " + twoDigits(this.getHours()) + ":" + twoDigits(this.getUTCMinutes()) + ":" + twoDigits(this.getUTCSeconds());
+};
+
+
+// Define our connection to the MySQL database.
+var pool = mysql.createPool({
+    host: config.mysql_host,
+    user: config.mysql_user,
+    password: config.mysql_pass,
+    database: config.mysql_dbname,
+    connectionLimit: 20, // Default value is 10.
+    waitForConnections: true, // Default value.
+    queueLimit: 0 // Unlimited - default value.
+});
+
+var db = {
+    query: function(sql, params) {
+        var deferred = Q.defer();
+        pool.query(sql, params, deferred.makeNodeResolver());
+        return (deferred.promise);
+    }
+};
 
 
 //convert record to fhir syntax based on resource type
@@ -254,20 +286,71 @@ observationFormatter = function(record) {
 }
 
 conceptFormatter = function(record) {
+    var concept_id = "1";
+    var concept_uuid = "1";
+    var description = record.name + " in " + record.system + " assay";
+    var description_uuid = "1";
+    var long_name = record.LabName;
+    var short_name = record.name
+    var hi_normal = record.max;
+    var low_normal = record.min;
+    var hi_absolute = record.max;
+    var low_absolute = record.min;
+    var hi_critical = record.max;
+    var low_critical = record.min;
+    var date = new Date().toMysqlFormat(); //return MySQL Datetime format
+    var daughters = [];
     var concept = {
-    "display": "Hemoglobin",
-    "names": [],
-    "mappings": [],
-    "answers": [],
-    "setMembers": [],
-    "conceptClass": "Test",
-    "datatype": "1",
-
-
+        "datatype_id": "1",
+        "date_created": date,
+        "class_id": "1",
+        "creator": "1",
+        "uuid": uuidv4()
+    };
+    daughters.push({
+        "concept_description": {
+            "concept_id": null,
+            "description": description,
+            "uuid": uuidv4()
+        }
+    });
+    daughters.push({
+        "concept_name": {
+            "concept_id": null,
+            "name": long_name,
+            "locale": "en",
+            "locale_preferred": "1",
+            "concept_name_type": "FULLY_SPECIFIED",
+            "uuid": uuidv4()
+        }
+    });
+    daughters.push({
+        "concept_name": {
+            "concept_id": null,
+            "name": short_name,
+            "locale": "en",
+            "locale_preferred": "1",
+            "concept_name_type": "SHORT",
+            "uuid": uuidv4()
+        }
+    });
+    daughters.push({
+        "concept_numeric": {
+            "concept_id": null,
+            "precise": "1",
+            "hi_normal": hi_normal,
+            "low_normal": low_normal,
+            "low_absolute": hi_absolute,
+            "low_absolute": low_absolute,
+            "hi_critical": hi_critical,
+            "low_critical": low_critical
+        }
+    });
+    return {
+        concept,
+        daughters
+    };
 }
-    return concept;
-}
-
 
 var observationTransformer = function(record) {
     //var catandname = record['LabName'].split(": ");
@@ -279,10 +362,99 @@ var observationTransformer = function(record) {
 }
 
 
+function rawRequest(resource) {
+    var promises = output[resource].map(
+        function iterator(r) {
+            // console.log(r);
+            var concept = r.concept;
+            var daughters = r.daughters;
+            var sql = "INSERT INTO concept (" + Object.keys(concept).join(",") + ") values (\"" + Object.values(concept).join("\",\"") + "\")";
+            var promise = db
+                .query(sql)
+                .then(
+                    function handleResponse(results) {
+                        var insertid = results[0].insertId;
+                        for (n in daughters) {
+                            var daughter = daughters[n];
+                            //console.log(daughter);
+                            Object.keys(daughter).forEach(function(key) {
+                                var val = daughter[key];
+                                Object.keys(val).forEach(function(k) {
+                                    if (k == "concept_id") {
+                                        val[k] = insertid;
+                                    }
+                                });
+                                daughter[key] = val;
+                            });
+                            daughters[n] = daughter;
+                        }
+                        //set id for dependant records
+                        delete r.concept;
+                        return daughters;
+                    },
+                    function handleError(error) {
+                        console.log('fail');
+                        return 0
+                    }
+                );
+            return promise;
+        })
+    Q.allSettled(promises)
+        .then(
+            function handleSettled(sn2) {
+                var records = [];
+                for (i in sn2) {
+                    var response = sn2[i];
+                    if (response.state == 'fulfilled') {
+                        //                    console.log(sn2[i]);
+                        for (j in response.value) {
+                            //console.log(response.value[j]);
+                            records.push(response.value[j]);
+                        }
+                    }
+                }
+
+                var decorate = decorateRecords(records);
+                Q.allSettled(decorate)
+                    .then(
+                        function handleSettled(sn2) {
+                            pool.end();
+                        }
+                    );
+            });
+
+}
+
+
+function decorateRecords(records) {
+    console.log(records.length);
+    var promises = Array(records.length);
+    for (var l in records) {
+        var r = records[l]
+        for (m in r) {
+            var keys = Object.keys(r[m])
+            var vals = Object.values(r[m])
+            var tab = m;
+            var sql = "INSERT INTO " + tab + " (" + keys.join(",") + ") values (\"" + vals.join("\",\"") + "\")";
+            console.log(sql);
+            promises[l] = db
+                .query(sql)
+                .then(
+                    function handleResponse(results) {
+                        return 1;
+                    },
+                    function handleError(error) {
+                        return 0
+                    }
+                );
+        }
+    }
+    return promises;
+}
+
 
 function restRequest(resource, count) {
     var postRecord = function(record) {
-console.log(record);
         var options = {
             method: 'POST',
             uri: config.url + '/rest/v1/' + resource.toLowerCase(),
@@ -330,6 +502,9 @@ console.log(record);
             restRequest(resource, count + stepsize);
         });
 }
+
+
+
 var importRestResource = function(resource) {
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
@@ -354,10 +529,34 @@ var importRestResource = function(resource) {
         })
         .on("end", function() {
             console.log("done");
-            console.log("Running sequential requests!")
+            console.log("Running rest requests")
             restRequest(resource)
         });
 }
+
+var importRawResource = function(resource) {
+    var filename = config.files[resource]
+    var stream = fs.createReadStream(filename);
+    output[resource] = []
+    csv
+        .fromStream(stream, {
+            headers: true,
+            delimiter: '\t'
+        })
+        .transform(function(obj) {
+            var transformed = transformRecord(obj, resource);
+            return transformed;
+        })
+        .on("data", function(data) {
+            output[resource].push(data);
+        })
+        .on("end", function() {
+            console.log("done");
+            console.log("Running raw requests")
+            rawRequest(resource)
+        });
+}
+
 
 
 
@@ -524,4 +723,4 @@ var genConcepts = function(source, destination) {
 //importFhirResource('Patient');
 //importFhirResource('Observation');
 //importFhirResource('Encounter');
-importRestResource('Concept');
+importRawResource('Concept');
