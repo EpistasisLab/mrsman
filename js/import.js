@@ -255,173 +255,16 @@ observationFormatter = function(record) {
 
 conceptFormatter = function(record) {
     var concept = {
-        "uuid": "3073f2ec-e632-4e47-a9e2-797fdae81452",
-        "display": "Hemoglobin",
-        "name": {
-            "display": "Hemoglobin",
-            "uuid": "524f5641-4477-44a5-80d7-0be98144f000",
-            "name": "Hemoglobin",
-            "locale": "en",
-            "localePreferred": true,
-            "conceptNameType": "FULLY_SPECIFIED",
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000?v=full"
-            }],
-            "resourceVersion": "1.9"
-        },
-        "datatype": {
-            "uuid": "8d4a4488-c2cc-11de-8d13-0010c6dffd0f",
-            "display": "Numeric",
-            "name": "Numeric",
-            "description": "Numeric value, including integer or float (e.g., creatinine, weight)",
-            "hl7Abbreviation": "NM",
-            "retired": false,
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptdatatype/8d4a4488-c2cc-11de-8d13-0010c6dffd0f"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptdatatype/8d4a4488-c2cc-11de-8d13-0010c6dffd0f?v=full"
-            }],
-            "resourceVersion": "1.8"
-        },
-        "conceptClass": {
-            "uuid": "8d4907b2-c2cc-11de-8d13-0010c6dffd0f",
-            "display": "Test",
-            "name": "Test",
-            "description": "Acq. during patient encounter (vitals, labs, etc.)",
-            "retired": false,
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptclass/8d4907b2-c2cc-11de-8d13-0010c6dffd0f"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/conceptclass/8d4907b2-c2cc-11de-8d13-0010c6dffd0f?v=full"
-            }],
-            "resourceVersion": "1.8"
-        },
-        "set": false,
-        "version": null,
-        "retired": false,
-        "names": [{
-            "display": "Hemoglobin",
-            "uuid": "524f5641-4477-44a5-80d7-0be98144f000",
-            "name": "Hemoglobin",
-            "locale": "en",
-            "localePreferred": true,
-            "conceptNameType": "FULLY_SPECIFIED",
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/524f5641-4477-44a5-80d7-0be98144f000?v=full"
-            }],
-            "resourceVersion": "1.9"
-        }, {
-            "display": "glob",
-            "uuid": "f49d97e8-bd61-4b43-8cfb-155da2fd5e55",
-            "name": "glob",
-            "locale": "en",
-            "localePreferred": false,
-            "conceptNameType": null,
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/f49d97e8-bd61-4b43-8cfb-155da2fd5e55"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/f49d97e8-bd61-4b43-8cfb-155da2fd5e55?v=full"
-            }],
-            "resourceVersion": "1.9"
-        }, {
-            "display": "Hgb",
-            "uuid": "7dea657a-612f-4eb0-bfbd-cc232c340900",
-            "name": "Hgb",
-            "locale": "en",
-            "localePreferred": false,
-            "conceptNameType": "SHORT",
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/7dea657a-612f-4eb0-bfbd-cc232c340900"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/7dea657a-612f-4eb0-bfbd-cc232c340900?v=full"
-            }],
-            "resourceVersion": "1.9"
-        }, {
-            "display": "heme",
-            "uuid": "be9652d5-816d-4dfb-8dc2-cf6fe0a3d974",
-            "name": "heme",
-            "locale": "en",
-            "localePreferred": false,
-            "conceptNameType": null,
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/be9652d5-816d-4dfb-8dc2-cf6fe0a3d974"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/name/be9652d5-816d-4dfb-8dc2-cf6fe0a3d974?v=full"
-            }],
-            "resourceVersion": "1.9"
-        }],
-        "descriptions": [{
-            "display": "blood hemoglobin",
-            "uuid": "f72fa0af-ac07-42fe-8f8d-0b5b6ee6ae5d",
-            "description": "blood hemoglobin",
-            "locale": "en",
-            "links": [{
-                "rel": "self",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/description/f72fa0af-ac07-42fe-8f8d-0b5b6ee6ae5d"
-            }, {
-                "rel": "full",
-                "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452/description/f72fa0af-ac07-42fe-8f8d-0b5b6ee6ae5d?v=full"
-            }],
-            "resourceVersion": "1.9"
-        }],
-        "mappings": [],
-        "answers": [],
-        "setMembers": [],
-        "auditInfo": {
-            "creator": {
-                "uuid": "1c3db49d-440a-11e6-a65c-00e04c680037",
-                "display": "admin",
-                "links": [{
-                    "rel": "self",
-                    "uri": "http://localhost:8090/openmrs/ws/rest/v1/user/1c3db49d-440a-11e6-a65c-00e04c680037"
-                }]
-            },
-            "dateCreated": "2018-04-23T15:48:53.000-0400",
-            "changedBy": {
-                "uuid": "1c3db49d-440a-11e6-a65c-00e04c680037",
-                "display": "admin",
-                "links": [{
-                    "rel": "self",
-                    "uri": "http://localhost:8090/openmrs/ws/rest/v1/user/1c3db49d-440a-11e6-a65c-00e04c680037"
-                }]
-            },
-            "dateChanged": "2018-04-24T13:20:34.000-0400"
-        },
-        "hiNormal": 18.0,
-        "hiAbsolute": 20.0,
-        "hiCritical": 19.0,
-        "lowNormal": 10.0,
-        "lowAbsolute": 1.0,
-        "lowCritical": 5.0,
-        "units": "gm/dl",
-        "allowDecimal": true,
-        "displayPrecision": null,
-        "attributes": [],
-        "links": [{
-            "rel": "self",
-            "uri": "http://localhost:8090/openmrs/ws/rest/v1/concept/3073f2ec-e632-4e47-a9e2-797fdae81452"
-        }],
-        "resourceVersion": "2.0"
-    }
+    "display": "Hemoglobin",
+    "names": [],
+    "mappings": [],
+    "answers": [],
+    "setMembers": [],
+    "conceptClass": "Test",
+    "datatype": "1",
 
+
+}
     return concept;
 }
 
@@ -439,6 +282,7 @@ var observationTransformer = function(record) {
 
 function restRequest(resource, count) {
     var postRecord = function(record) {
+console.log(record);
         var options = {
             method: 'POST',
             uri: config.url + '/rest/v1/' + resource.toLowerCase(),
@@ -506,13 +350,12 @@ var importRestResource = function(resource) {
         //            log.log("invalid data")
         //        })
         .on("data", function(data) {
-            console.log(data);
             output[resource].push(data);
         })
         .on("end", function() {
             console.log("done");
             console.log("Running sequential requests!")
-            //restRequest(resource)
+            restRequest(resource)
         });
 }
 
