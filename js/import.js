@@ -24,7 +24,7 @@ var config = require('./config');
 
 // globals
 //show the gui
-var gui = false;
+var gui = true;
 
 
 const checkstring = '0123456789ACDEFGHJKLMNPRTUVWXY'
@@ -54,6 +54,15 @@ if (gui) {
         cols: 12,
         screen: screen
     })
+
+
+
+
+//var tree = grid.set(4,0,4,12, contrib.tree({fg: 'green'}));
+//screen.append(tree);
+//allow control the table with the keyboard
+
+
     var gauge = grid.set(0, 0, 4, 12, contrib.gauge, {
         label: 'Progress',
         stroke: 'green',
@@ -100,24 +109,66 @@ if (gui) {
                 }
             ]);
     }
+
+
+var tree = contrib.tree({fg: 'green'})
+
+   //allow control the table with the keyboard
+   tree.focus()
+
+   tree.on('select',function(node){
+     if (node.myCustomProperty){
+       console.log(node.myCustomProperty);
+     }
+     console.log(node.name);
+   });
+
+   // you can specify a name property at root level to display root
+   tree.setData(
+   { extended: true
+   , children:
+     {
+       'Fruit':
+       { children:
+         { 'Banana': {}
+         , 'Apple': {}
+         , 'Cherry': {}
+         , 'Exotics': {
+             children:
+             { 'Mango': {}
+             , 'Papaya': {}
+             , 'Kiwi': { name: 'Kiwi (not the bird!)', myCustomProperty: "hairy fruit" }
+             }}
+         , 'Pear': {}}}
+     , 'Vegetables':
+       { children:
+         { 'Peas': {}
+         , 'Lettuce': {}
+         , 'Pepper': {}}}}})
+
+screen.key('q', function() {
+  process.exit(0);
+});
+
+
+
     screen.render()
 } else {
     var setGuage = function(percent_success, percent_fail, percent_left) {}
     var log = console;
 }
 
-function twoDigits(d) {
-    if (0 <= d && d < 10) return "0" + d.toString();
-    if (-10 < d && d < 0) return "-0" + (-1 * d).toString();
-    return d.toString();
-}
-
+//convert to mysql dates
 Date.prototype.toMysqlFormat = function() {
+    function twoDigits(d) {
+        if (0 <= d && d < 10) return "0" + d.toString();
+        if (-10 < d && d < 0) return "-0" + (-1 * d).toString();
+        return d.toString();
+    }
     return this.getUTCFullYear() + "-" + twoDigits(1 + this.getUTCMonth()) + "-" + twoDigits(this.getUTCDate()) + " " + twoDigits(this.getHours()) + ":" + twoDigits(this.getUTCMinutes()) + ":" + twoDigits(this.getUTCSeconds());
 };
 
-
-// Define our connection to the MySQL database.
+// Define the connection to MySQL database.
 var pool = mysql.createPool({
     host: config.mysql_host,
     user: config.mysql_user,
@@ -128,6 +179,7 @@ var pool = mysql.createPool({
     queueLimit: 0 // Unlimited - default value.
 });
 
+//helper function for db queries
 var db = {
     query: function(sql, params) {
         var deferred = Q.defer();
@@ -136,17 +188,12 @@ var db = {
     }
 };
 
-
 //convert record to fhir syntax based on resource type
 var resourceTrans = function(record, resource) {
     var transformer = {}
     transformer['Observation'] = observationTransformer;
     return transformer[resource](record);
 }
-
-
-
-
 
 //convert record to fhir syntax based on resource type
 var transformRecord = function(record, resource) {
@@ -162,7 +209,7 @@ var transformRecord = function(record, resource) {
     return formatter(record);
 }
 
-
+// create fhir compatible patient object
 var patientFormatter = function(record) {
     var id = record.PatientID.substring(0, 7).replace(/B/g, 'H');
     var OpenMRSID = id + luhn.generateCheckCharacter(id, checkstring);
@@ -201,7 +248,7 @@ var patientFormatter = function(record) {
     return patient;
 }
 
-
+//placeholder
 var encounterFormatter = function(record) {
     var encounter = {
         "resourceType": "Encounter",
@@ -263,8 +310,7 @@ var encounterFormatter = function(record) {
     return visit;
 }
 
-
-
+//placeholder
 observationFormatter = function(record) {
     var observation = {
         "resourceType": "Observation",
@@ -285,7 +331,9 @@ observationFormatter = function(record) {
     return observation;
 }
 
+//format openmrs specific db objects from concept record
 conceptFormatter = function(record) {
+//console.log(record);
     var concept_id = "1";
     var concept_uuid = "1";
     var description = record.name + " in " + record.system + " assay";
@@ -298,6 +346,7 @@ conceptFormatter = function(record) {
     var low_absolute = record.min;
     var hi_critical = record.max;
     var low_critical = record.min;
+    var units = record.units;
     var date = new Date().toMysqlFormat(); //return MySQL Datetime format
     var daughters = [];
     var concept = {
@@ -310,6 +359,11 @@ conceptFormatter = function(record) {
     daughters.push({
         "concept_description": {
             "concept_id": null,
+            "date_created": date,
+            "date_changed": date,
+            "locale": "en",
+            "creator": "1",
+            "changed_by": "1",
             "description": description,
             "uuid": uuidv4()
         }
@@ -318,6 +372,8 @@ conceptFormatter = function(record) {
         "concept_name": {
             "concept_id": null,
             "name": long_name,
+            "date_created": date,
+            "creator": "1",
             "locale": "en",
             "locale_preferred": "1",
             "concept_name_type": "FULLY_SPECIFIED",
@@ -328,8 +384,10 @@ conceptFormatter = function(record) {
         "concept_name": {
             "concept_id": null,
             "name": short_name,
+            "date_created": date,
+            "creator": "1",
             "locale": "en",
-            "locale_preferred": "1",
+            "locale_preferred": "0",
             "concept_name_type": "SHORT",
             "uuid": uuidv4()
         }
@@ -338,9 +396,10 @@ conceptFormatter = function(record) {
         "concept_numeric": {
             "concept_id": null,
             "precise": "1",
+            "units": units,
             "hi_normal": hi_normal,
             "low_normal": low_normal,
-            "low_absolute": hi_absolute,
+            "hi_absolute": hi_absolute,
             "low_absolute": low_absolute,
             "hi_critical": hi_critical,
             "low_critical": low_critical
@@ -352,9 +411,8 @@ conceptFormatter = function(record) {
     };
 }
 
+//remove fields we don't need to generate unique observation concepts
 var observationTransformer = function(record) {
-    //var catandname = record['LabName'].split(": ");
-    //var lab_name = catandname[1];
     delete record['PatientID'];
     delete record['AdmissionID'];
     delete record['LabDateTime'];
@@ -362,7 +420,43 @@ var observationTransformer = function(record) {
 }
 
 
+//process text files for SQL import
+var importRawResource = function(resource) {
+    var filename = config.files[resource]
+    var stream = fs.createReadStream(filename);
+    output[resource] = []
+//perform database inserts
 function rawRequest(resource) {
+
+    //create daughter records
+    function decorateRecords(records) {
+        var promises = Array(records.length);
+        for (var l in records) {
+            var r = records[l]
+            for (m in r) {
+                var keys = Object.keys(r[m])
+                var vals = Object.values(r[m])
+                var tab = m;
+                var sql = "INSERT INTO " + tab + " (" + keys.join(",") + ") values (\"" + vals.join("\",\"") + "\")";
+                //console.log(sql);
+                promises[l] = db
+                    .query(sql)
+                    .then(
+                        function handleResponse(results) {
+                            return 1;
+                        },
+                        function handleError(error) {
+                            console.log("error inserting daughter records");
+                            console.log(error);
+                            return 0
+                        }
+                    );
+            }
+        }
+        return promises;
+    }
+
+    //create parent records
     var promises = output[resource].map(
         function iterator(r) {
             // console.log(r);
@@ -393,7 +487,9 @@ function rawRequest(resource) {
                         return daughters;
                     },
                     function handleError(error) {
-                        console.log('fail');
+                        if(error.sqlMessage !== undefined) {
+                            log.log(error.sqlMessage);
+                        }
                         return 0
                     }
                 );
@@ -408,7 +504,6 @@ function rawRequest(resource) {
                     if (response.state == 'fulfilled') {
                         //                    console.log(sn2[i]);
                         for (j in response.value) {
-                            //console.log(response.value[j]);
                             records.push(response.value[j]);
                         }
                     }
@@ -424,88 +519,79 @@ function rawRequest(resource) {
             });
 
 }
-
-
-function decorateRecords(records) {
-    console.log(records.length);
-    var promises = Array(records.length);
-    for (var l in records) {
-        var r = records[l]
-        for (m in r) {
-            var keys = Object.keys(r[m])
-            var vals = Object.values(r[m])
-            var tab = m;
-            var sql = "INSERT INTO " + tab + " (" + keys.join(",") + ") values (\"" + vals.join("\",\"") + "\")";
-            console.log(sql);
-            promises[l] = db
-                .query(sql)
-                .then(
-                    function handleResponse(results) {
-                        return 1;
-                    },
-                    function handleError(error) {
-                        return 0
-                    }
-                );
-        }
-    }
-    return promises;
-}
-
-
-function restRequest(resource, count) {
-    var postRecord = function(record) {
-        var options = {
-            method: 'POST',
-            uri: config.url + '/rest/v1/' + resource.toLowerCase(),
-            headers: {
-                "Authorization": config.auth
-            },
-            json: record // Automatically stringifies the body to JSON
-        };
-        var promise = rp(options)
-        return (promise);
-    }
-
-    var promises = new Array(stepsize);
-    if (count > output[resource].length) {
-        return
-    } else if (count == undefined) {
-        count = 0
-    }
-    for (var i = 0; i < stepsize; i++) {
-        var record = output[resource][count + i];
-        if (record) {
-            promises[i] = postRecord(record);
-        }
-    }
-    Q.allSettled(promises)
-        .then(function(results) {
-            results.forEach(function(result) {
-                //console.log(JSON.stringify(result));
-                if (result.state === "fulfilled") {
-                    successcount++
-                    //var value = result.value;
-                } else {
-                    //var reason = result.reason;
-                    failcount++
-                }
-            });
-            log.log({
-                count,
-                stepsize
-            });
-            log.log({
-                successcount,
-                failcount
-            });
-            restRequest(resource, count + stepsize);
+    csv
+        .fromStream(stream, {
+            headers: true,
+            delimiter: '\t'
+        })
+        .transform(function(obj) {
+            var transformed = transformRecord(obj, resource);
+            return transformed;
+        })
+        .on("data", function(data) {
+            output[resource].push(data);
+        })
+        .on("end", function() {
+            log.log("Running raw requests")
+            rawRequest(resource)
         });
 }
 
 
 
+
+//process text files for RESTful import
 var importRestResource = function(resource) {
+    //post a output to rest interface
+    function request(resource, count) {
+        var postRecord = function(record) {
+            var options = {
+                method: 'POST',
+                uri: config.url + '/rest/v1/' + resource.toLowerCase(),
+                headers: {
+                    "Authorization": config.auth
+                },
+                json: record // Automatically stringifies the body to JSON
+            };
+            var promise = rp(options)
+            return (promise);
+        }
+
+        var promises = new Array(stepsize);
+        if (count > output[resource].length) {
+            return
+        } else if (count == undefined) {
+            count = 0
+        }
+        for (var i = 0; i < stepsize; i++) {
+            var record = output[resource][count + i];
+            if (record) {
+                promises[i] = postRecord(record);
+            }
+        }
+        Q.allSettled(promises)
+            .then(function(results) {
+                results.forEach(function(result) {
+                    //console.log(JSON.stringify(result));
+                    if (result.state === "fulfilled") {
+                        successcount++
+                        //var value = result.value;
+                    } else {
+                        //var reason = result.reason;
+                        failcount++
+                    }
+                });
+                log.log({
+                    count,
+                    stepsize
+                });
+                log.log({
+                    successcount,
+                    failcount
+                });
+                restRequest(resource, count + stepsize);
+            });
+    }
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
     output[resource] = []
@@ -518,12 +604,6 @@ var importRestResource = function(resource) {
             var transformed = transformRecord(obj, resource);
             return transformed;
         })
-        //        .validate(function(data) {
-        //            return data.resourceType !== undefined; //resources need type
-        //        })
-        //        .on("data-invalid", function(data) {
-        //            log.log("invalid data")
-        //        })
         .on("data", function(data) {
             output[resource].push(data);
         })
@@ -534,83 +614,62 @@ var importRestResource = function(resource) {
         });
 }
 
-var importRawResource = function(resource) {
-    var filename = config.files[resource]
-    var stream = fs.createReadStream(filename);
-    output[resource] = []
-    csv
-        .fromStream(stream, {
-            headers: true,
-            delimiter: '\t'
-        })
-        .transform(function(obj) {
-            var transformed = transformRecord(obj, resource);
-            return transformed;
-        })
-        .on("data", function(data) {
-            output[resource].push(data);
-        })
-        .on("end", function() {
-            console.log("done");
-            console.log("Running raw requests")
-            rawRequest(resource)
-        });
-}
 
 
 
 
-function fhirRequest(resource, count) {
-    var postRecord = function(record) {
-        var options = {
-            method: 'POST',
-            uri: config.url + '/fhir/' + resource,
-            headers: {
-                "Authorization": config.auth
-            },
-            json: record // Automatically stringifies the body to JSON
-        };
-        var promise = rp(options)
-        return (promise);
-    }
-
-    var promises = new Array(stepsize);
-    if (count > output[resource].length) {
-        return
-    } else if (count == undefined) {
-        count = 0
-    }
-    for (var i = 0; i < stepsize; i++) {
-        var record = output[resource][count + i];
-        if (record) {
-            promises[i] = postRecord(record);
-        }
-    }
-    Q.allSettled(promises)
-        .then(function(results) {
-            results.forEach(function(result) {
-                //console.log(JSON.stringify(result));
-                if (result.state === "fulfilled") {
-                    successcount++
-                    //var value = result.value;
-                } else {
-                    //var reason = result.reason;
-                    failcount++
-                }
-            });
-            log.log({
-                count,
-                stepsize
-            });
-            log.log({
-                successcount,
-                failcount
-            });
-            fhirRequest(resource, count + stepsize);
-        });
-}
-
+//process text files for FHIR import
 var importFhirResource = function(resource) {
+    function request(resource, count) {
+        var postRecord = function(record) {
+            var options = {
+                method: 'POST',
+                uri: config.url + '/fhir/' + resource,
+                headers: {
+                    "Authorization": config.auth
+                },
+                json: record // Automatically stringifies the body to JSON
+            };
+            var promise = rp(options)
+            return (promise);
+        }
+
+        var promises = new Array(stepsize);
+        if (count > output[resource].length) {
+            return
+        } else if (count == undefined) {
+            count = 0
+        }
+        for (var i = 0; i < stepsize; i++) {
+            var record = output[resource][count + i];
+            if (record) {
+                promises[i] = postRecord(record);
+            }
+        }
+        Q.allSettled(promises)
+            .then(function(results) {
+                results.forEach(function(result) {
+                    //console.log(JSON.stringify(result));
+                    if (result.state === "fulfilled") {
+                        successcount++
+                        //var value = result.value;
+                    } else {
+                        //var reason = result.reason;
+                        failcount++
+                    }
+                });
+                log.log({
+                    count,
+                    stepsize
+                });
+                log.log({
+                    successcount,
+                    failcount
+                });
+                request(resource, count + stepsize);
+            });
+    }
+
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
     output[resource] = []
@@ -723,4 +782,3 @@ var genConcepts = function(source, destination) {
 //importFhirResource('Patient');
 //importFhirResource('Observation');
 //importFhirResource('Encounter');
-importRawResource('Concept');
