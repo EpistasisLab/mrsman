@@ -1,15 +1,14 @@
-// import patients from example dataset provided by:
+#!/usr/bin/env node
+ // import patients from example dataset provided by:
 // "A 100,000-patient database that contains in total 100,000 patients, 361,760 admissions, and 107,535,387 lab observations."
 // http://arxiv.org/pdf/1608.00570.pdf 
 
 // basic requires
 const http = require('http');
 const Q = require("q"); // v2.11.1
-// record creation
 const luhn = require('luhn-mod-n');
 const randomname = require('node-random-name')
 const rp = require('request-promise');
-const request = require('request');
 //ui
 const blessed = require('blessed');
 const contrib = require('blessed-contrib');
@@ -18,6 +17,7 @@ const transform = require('stream-transform');
 const csv = require("fast-csv");
 const uuidv4 = require('uuid/v4');
 const mysql = require('mysql');
+const vorpal = require('vorpal')();
 
 // configs
 var config = require('./config');
@@ -162,19 +162,6 @@ if (gui) {
     var setGuage = function(percent_success, percent_fail, percent_left) {}
     var log = console;
 }
-var handleNode = function(name, loadType) {
-    log.log(name);
-    log.log(loadType);
-    if (loadType == 'raw') {
-        importRawResource(name);
-    } else if (loadType == 'rest') {
-        importRestResource(name);
-    } else if (loadType == 'fhir') {
-        importFhirResource(name);
-    }
-return({'foo':'bar'});
-}
-
 //convert to mysql dates
 Date.prototype.toMysqlFormat = function() {
     function twoDigits(d) {
@@ -226,10 +213,29 @@ var transformRecord = function(record, resource) {
     return formatter(record);
 }
 
+var practitioner = {
+    "resourceType": "Practitioner",
+    "id": "a846f32f-5401-4d53-871a-68354c22c3f9",
+    "name": {
+        "family": [
+            "Careful"
+        ],
+        "given": [
+            "Adam"
+        ]
+    },
+    address: [{
+        use: "home",
+        city: "E. Kanateng"
+    }],
+    gender: "MALE",
+    birthDate: "2009-08-11T00:00:00"
+}
+
 // create fhir compatible patient object
 var patientFormatter = function(record) {
-    var id = uuidv4().toUpperCase().substring(0, 8).replace(/B/g, 'H');
-    //var id = record.PatientID.substring(0, 6).replace(/B/g, 'H');
+    var uuid = record.PatientID.toLowerCase();
+    var id = record.PatientID.substring(0, 10).replace(/B/g, 'H').replace('-', '');
     var OpenMRSID = id + luhn.generateCheckCharacter(id, checkstring);
     var gender = record.PatientGender.toLowerCase();
     var identifier = record.PatientID.toLowerCase()
@@ -246,6 +252,7 @@ var patientFormatter = function(record) {
 
     var patient = {
         "resourceType": "Patient",
+        "id": uuid,
         "identifier": [{
             "use": "usual",
             "system": "OpenMRS ID",
@@ -268,60 +275,37 @@ var patientFormatter = function(record) {
 
 //placeholder
 var encounterFormatter = function(record) {
-    var encounter = {
+    var date_start = new Date(record.AdmissionStartDate).toISOString();
+    var date_end = new Date(record.AdmissionEndDate).toISOString();
+    var patient_uuid = record.PatientID.toLowerCase();
+    var visit = {
         "resourceType": "Encounter",
         "type": [{
             "coding": [{
-                "display": "Vitals"
+                "code": "1"
             }]
         }],
         "subject": {
-            "id": "69f895f8-5929-4be4-8164-bd7fd581e19d",
+            "id": patient_uuid,
         },
         "participant": [{
             "individual": {
-                "reference": "Practitioner/328797d7-196e-4344-9c12-6615bf26cc97",
+                "reference": "Practitioner/0bf6fc77-97ec-408b-b037-c039a7b9b7bc",
+                "display": "Adam Careful(Identifier:null)"
             }
         }],
         "period": {
-            "start": "2018-04-23T10:58:10-04:00",
-            "end": "2018-04-23T10:58:10-04:00"
+            "start": date_start,
+            "end": date_end
         },
         "location": [{
             "location": {
-                "reference": "Location/b1a8b05e-3542-4037-bbd3-998ee9c40574",
+                "reference": "Location/8d6c993e-c2cc-11de-8d13-0010c6dffd0f",
+                "display": "Unknown Location"
             },
             "period": {
-                "start": "2018-04-23T10:58:10-04:00",
-                "end": "2018-04-23T10:58:10-04:00"
-            }
-        }],
-        "partOf": {
-            "reference": "Encounter/81df0058-6c93-4238-859d-8e63fee7766c",
-        }
-    }
-    var visit = {
-        "resourceType": "Encounter",
-        "subject": {
-            "id": "f199a94a-a726-47b4-b660-15b45ded6045",
-        },
-
-        "type": [{
-            "coding": [{
-                "code": "1",
-            }]
-        }],
-
-        "period": {
-            "start": "2018-04-23T10:33:10-04:00"
-        },
-        "location": [{
-            "location": {
-                "reference": "Location/aff27d58-a15c-49a6-9beb-d30dcfc0c66e",
-                "display": "Amani Hospital"
-            },
-            "period": {
-                "start": "2018-04-23T10:33:10-04:00"
+                "start": date_start,
+                "end": date_end
             }
         }]
     }
@@ -330,7 +314,7 @@ var encounterFormatter = function(record) {
 
 //placeholder
 observationFormatter = function(record) {
-    var observation = {
+    var o = {
         "resourceType": "Observation",
         "code": {
             "coding": [{
@@ -346,12 +330,31 @@ observationFormatter = function(record) {
             "value": 15.4,
         }
     }
+    var date = new Date(record.LabDateTime).toISOString();
+    var patient_uuid = record.PatientID.toLowerCase();
+    var observation = {
+        "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                "code": record.LabName
+            }]
+        },
+        "subject": {
+            "id": patient_uuid,
+        },
+        "effectiveDateTime": date,
+        "issued": date,
+        "valueQuantity": {
+            "value": record.LabValue,
+            "unit": record.LabUnits,
+            "system": "http://unitsofmeasure.org",
+        }
+    }
     return observation;
 }
 
-//format openmrs specific db objects from concept record
+//openmrs specific format for lab values from concept record
 conceptFormatter = function(record) {
-    //console.log(record);
     var concept_id = "1";
     var concept_uuid = "1";
     var description = record.name + " in " + record.system + " assay";
@@ -438,7 +441,7 @@ var observationTransformer = function(record) {
 }
 
 
-//process text files for SQL import
+//process text files for import
 var importRawResource = function(resource) {
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
@@ -555,100 +558,29 @@ var importRawResource = function(resource) {
         });
 }
 
-
-
-
-//process text files for RESTful import
-var importRestResource = function(resource) {
-    //post a output to rest interface
-    function request(resource, count) {
-        var postRecord = function(record) {
-            var options = {
-                method: 'POST',
-                uri: config.url + '/rest/v1/' + resource.toLowerCase(),
-                headers: {
-                    "Authorization": config.auth
-                },
-                json: record // Automatically stringifies the body to JSON
-            };
-            var promise = rp(options)
-            return (promise);
-        }
-
-        var promises = new Array(stepsize);
-        if (count > output[resource].length) {
-            return
-        } else if (count == undefined) {
-            count = 0
-        }
-        for (var i = 0; i < stepsize; i++) {
-            var record = output[resource][count + i];
-            if (record) {
-                promises[i] = postRecord(record);
-            }
-        }
-        Q.allSettled(promises)
-            .then(function(results) {
-                results.forEach(function(result) {
-                    //console.log(JSON.stringify(result));
-                    if (result.state === "fulfilled") {
-                        successcount++
-                        //var value = result.value;
-                    } else {
-                        //var reason = result.reason;
-                        failcount++
-                    }
-                });
-                log.log({
-                    count,
-                    stepsize
-                });
-                log.log({
-                    successcount,
-                    failcount
-                });
-                request(resource, count + stepsize);
-            })
-            .catch(function(err) {
-                log.log('try again');
-            });
-
-    }
-    var filename = config.files[resource]
-    var stream = fs.createReadStream(filename);
-    output[resource] = []
-    csv
-        .fromStream(stream, {
-            headers: true,
-            delimiter: '\t'
-        })
-        .transform(function(obj) {
-            var transformed = transformRecord(obj, resource);
-            return transformed;
-        })
-        .on("data", function(data) {
-            output[resource].push(data);
-        })
-        .on("end", function() {
-            console.log("done");
-            console.log("Running rest requests")
-            request(resource)
-        });
+var postFhirResource = function(resource) {
+    return handleFhirResource(resource, 'POST');
+}
+var putFhirResource = function(resource) {
+    return handleFhirResource(resource, 'PUT');
 }
 
 
-
-
-
 //process text files for FHIR import
-var importFhirResource = function(resource) {
+var handleFhirResource = function(resource, method) {
     function request(resource, count) {
         //console.log('request');
         //console.log({count});
-        var postRecord = function(record) {
+        var handleRecord = function(record) {
+            if (method == 'PUT') {
+                var uri = config.url + '/fhir/' + resource + '/' + record.id;
+            } else {
+                var uri = config.url + '/fhir/' + resource;
+            }
+            //console.log(record);
             var options = {
-                method: 'POST',
-                uri: config.url + '/fhir/' + resource,
+                method: method,
+                uri: uri,
                 headers: {
                     "Authorization": config.auth
                 },
@@ -656,6 +588,8 @@ var importFhirResource = function(resource) {
             };
             var promise = rp(options)
             return (promise);
+            //  var deferred = Q.defer();
+            //  return deferred.promise;
         }
 
         var promises = new Array(stepsize);
@@ -667,7 +601,7 @@ var importFhirResource = function(resource) {
         for (var i = 0; i < stepsize; i++) {
             var record = output[resource][count + i];
             if (record) {
-                promises[i] = postRecord(record);
+                promises[i] = handleRecord(record);
             }
         }
         Q.allSettled(promises)
@@ -804,52 +738,58 @@ var genConcepts = function(source, destination) {
 }
 
 
-const vorpal = require('vorpal')();
+console.log(process.argv.length);
+if (process.argv.length >= 3) {
+    if (process.argv[2] == 'genconcepts') {
+        genConcepts('Observation', 'Concept');
+        //} else 
+    }
+
+} else {
+
+    //ui
+    vorpal
+        .command('genconcepts', 'Generate Lab Dictionary')
+        .action(function(args, callback) {
+            genConcepts('Observation', 'Concept');
+            this.log('bar');
+            callback();
+        });
+
+    vorpal
+        .command('loadconcepts', 'Import Dictionary')
+        .action(function(args, callback) {
+            importRawResource('Concept');
+            this.log('bar');
+            callback();
+        });
+
+    vorpal
+        .command('loadpatients', 'Import Patients')
+        .action(function(args, callback) {
+            postFhirResource('Patient');
+            this.log('bar');
+            callback();
+        });
+
+    vorpal
+        .command('loadencounters', 'Import Visits')
+        .action(function(args, callback) {
+            postFhirResource('Encounter');
+            this.log('bar');
+            callback();
+        });
 
 
+    vorpal
+        .command('loadlabs', 'Import Observations')
+        .action(function(args, callback) {
+            postFhirResource('Observation');
+            this.log('bar');
+            callback();
+        });
 
-vorpal
-  .command('genconcepts', 'Generate Lab Dictionary')
-  .action(function(args, callback) {
-   genConcepts('Observation','Concept');
-    this.log('bar');
-    callback();
-  });
-
-vorpal
-  .command('loadconcepts', 'Import Dictionary')
-  .action(function(args, callback) {
-   importRawResource('Concept');
-    this.log('bar');
-    callback();
-  });
-
-vorpal
-  .command('loadpatients', 'Import Patients')
-  .action(function(args, callback) {
-   importFhirResource('Patient');
-    this.log('bar');
-    callback();
-  });
-
-vorpal
-  .command('loadencounters', 'Import Visits')
-  .action(function(args, callback) {
-   importFhirResource('Encounter');
-    this.log('bar');
-    callback();
-  });
-
-
-vorpal
-  .command('loadlabs', 'Import Observations')
-  .action(function(args, callback) {
-   importFhirResource('Observation');
-    this.log('bar');
-    callback();
-  });
-
-
-vorpal
-  .delimiter('mrsman$')
-  .show();
+    vorpal
+        .delimiter('mrsman$')
+        .show();
+}
