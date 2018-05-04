@@ -6,7 +6,6 @@
 // basic requires
 const http = require('http');
 const Q = require("q"); // v2.11.1
-const luhn = require('luhn-mod-n');
 const randomname = require('node-random-name')
 const rp = require('request-promise');
 //ui
@@ -42,6 +41,7 @@ var successcount = 0;
 //array for working data
 var output = {};
 output['fhir'] = {}
+output['rest'] = {}
 output['raw'] = {}
 
 
@@ -98,30 +98,65 @@ var transformRecord = function(record, resource) {
     return formatter(record);
 }
 
+var visittype = [{
+    date_created: new Date().toMysqlFormat(),
+    visit_type_id:1,
+    creator:1,
+    name:"inpatient",
+    description:"Inpatient Visit"
+}]
+output['raw']['visittype'] = [visittype];
+
 var practitioner = {
     "resourceType": "Practitioner",
-    "id": "a846f32f-5401-4d53-871a-68354c22c3f9",
+    "id": "9a1beb05-35da-47ef-8155-90d1e3cec4e7",
     "name": {
         "family": [
-            "Careful"
+            "Squash"
         ],
         "given": [
-            "Adam"
+            "Joshua"
         ]
     },
     address: [{
         use: "home",
         city: "E. Kanateng"
     }],
-    gender: "MALE",
-    birthDate: "2009-08-11T00:00:00"
+    gender: "male", 
+    birthDate: "2010-04-03T00:00:00"
 }
+output['fhir']['Practitioner'] = [practitioner]
 
 // create fhir compatible patient object
 var patientFormatter = function(record) {
+    //console.log(record);
+    function luhnCheckDigit(number) {
+        var validChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVYWXZ_";
+        var sum = 0;
+        number = number.toString();
+        for (var i = 0; i < number.length; i++) {
+            var ch = number.charAt(number.length - i - 1);
+            if (validChars.indexOf(ch) < 0) {
+                console.log("Invalid character(s) found!");
+                return false;
+            }
+            var digit = ch.charCodeAt(0) - 48;
+            var weight;
+            if (i % 2 == 0) {
+                weight = (2 * digit) - parseInt(digit / 5) * 9;
+            } else {
+                weight = digit;
+            }
+            sum += weight;
+        }
+        sum = Math.abs(sum) + 10;
+        var digit = (10 - (sum % 10)) % 10;
+        return digit;
+    }
     var uuid = record.PatientID.toLowerCase();
-    var id = record.PatientID.substring(0, 10).replace(/B/g, 'H').replace('-', '');
-    var OpenMRSID = id + luhn.generateCheckCharacter(id, checkstring);
+    var num = (new Date).getTime().toString().substring(8,13) + record.num;
+    var checkdigit = luhnCheckDigit(num);
+    var OpenMRSID = num + '-' + checkdigit;
     var gender = record.PatientGender.toLowerCase();
     var identifier = record.PatientID.toLowerCase()
     var birthdate = new Date(record.PatientDateOfBirth).toISOString().substr(0, 10);
@@ -140,7 +175,7 @@ var patientFormatter = function(record) {
         "id": uuid,
         "identifier": [{
             "use": "usual",
-            "system": "OpenMRS ID",
+            "system": "OpenMRS Identification Number",
             "value": OpenMRSID
         }],
         "name": [{
@@ -160,19 +195,15 @@ var patientFormatter = function(record) {
 
 //openmrs specific format for lab values from concept record
 conceptFormatter = function(record) {
-    var concept_id = "1";
-    var concept_uuid = "1";
     var description = record.name + " in " + record.system + " assay";
-    var description_uuid = "1";
     var long_name = record.LabName;
     var short_name = record.name
     var hi_normal = record.max;
-   var low_normal = record.min;
+    var low_normal = record.min;
     var hi_absolute = record.max;
     var low_absolute = record.min;
     var hi_critical = record.max;
     var low_critical = record.min;
-    var units = record.units;
     var date = new Date().toMysqlFormat(); //return MySQL Datetime format
     var daughters = [];
     var concept = {
@@ -180,8 +211,8 @@ conceptFormatter = function(record) {
         "date_created": date,
         "class_id": "1",
         "creator": "1",
-        "uuid": uuidv4()
-   };
+        "uuid": record.uuid
+    };
     daughters.push({
         "concept_description": {
             "concept_id": null,
@@ -194,7 +225,7 @@ conceptFormatter = function(record) {
             "uuid": uuidv4()
         }
     });
-   daughters.push({
+    daughters.push({
         "concept_name": {
             "concept_id": null,
             "name": long_name,
@@ -221,8 +252,7 @@ conceptFormatter = function(record) {
     daughters.push({
         "concept_numeric": {
             "concept_id": null,
-            "precise": "1",
-            "units": units,
+            "units": record.units,
             "hi_normal": hi_normal,
             "low_normal": low_normal,
             "hi_absolute": hi_absolute,
@@ -255,7 +285,7 @@ var encounterFormatter = function(record) {
         },
         "participant": [{
             "individual": {
-                "reference": "Practitioner/0bf6fc77-97ec-408b-b037-c039a7b9b7bc",
+                "reference": "Practitioner/9a1beb05-35da-47ef-8155-90d1e3cec4e7",
                 "display": "Adam Careful(Identifier:null)"
             }
         }],
@@ -313,6 +343,7 @@ var observationTransformer = function(record) {
 
 //process text files for import
 var importRawResource = function(resource) {
+    var deferred = Q.defer();
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
     output['raw'][resource] = []
@@ -404,6 +435,7 @@ var importRawResource = function(resource) {
                     Q.allSettled(decorate)
                         .then(
                             function handleSettled(sn2) {
+                                return deferred.resolve();
                                 pool.end();
                             }
                         );
@@ -426,28 +458,31 @@ var importRawResource = function(resource) {
             console.log("Running raw requests")
             rawRequest(resource)
         });
+    return deferred.promise;
 }
-
-var postFhirResource = function(resource) {
-    return handleFhirResource(resource, 'POST');
-}
-var putFhirResource = function(resource) {
-    return handleFhirResource(resource, 'PUT');
-}
-
 
 //process text files for FHIR import
-var handleFhirResource = function(resource, method) {
-    output['fhir'][resource] = []
+var postResource = function(cat,resource) {
+    var deferred = Q.defer();
+    var uri = config.url 
+if(cat == 'fhir') {
+    uri = uri + '/fhir/' + resource
+} else {
+    uri = uri + '/rest/v1/' + resource.toLowerCase();
+}
+
     function request(resource, count) {
         //console.log('request');
         //console.log({count});
         var handleRecord = function(record) {
-            if (method == 'PUT') {
-                var uri = config.url + '/fhir/' + resource + '/' + record.id;
-            } else {
-                var uri = config.url + '/fhir/' + resource;
-            }
+
+
+if(record.id !== undefined) {
+    var method = 'PUT';
+    uri = uri + '/' + record.id;
+} else {
+    var method = 'POST';
+}
             //console.log(record);
             var options = {
                 method: method,
@@ -459,18 +494,17 @@ var handleFhirResource = function(resource, method) {
             };
             var promise = rp(options)
             return (promise);
-            //  var deferred = Q.defer();
-            //  return deferred.promise;
         }
 
         var promises = new Array(stepsize);
-        if (count > output['fhir'][resource].length) {
+        if (count > output[cat][resource].length) {
+            deferred.resolve();
             return
         } else if (count == undefined) {
             count = 0
         }
         for (var i = 0; i < stepsize; i++) {
-            var record = output['fhir'][resource][count + i];
+            var record = output[cat][resource][count + i];
             if (record) {
                 promises[i] = handleRecord(record);
             }
@@ -496,7 +530,7 @@ var handleFhirResource = function(resource, method) {
                     failcount
                 });
                 request(resource, count + stepsize);
-                var percent_success = successcount / output['fhir'][resource].length;
+                var percent_success = successcount / output[cat][resource].length;
             })
             .catch(function(err) {
                 console.log(err);
@@ -504,14 +538,19 @@ var handleFhirResource = function(resource, method) {
             });
     }
 
+if(config.files[resource] !==undefined  &&  output[cat][resource]  === undefined) {
+    output[cat][resource] = []
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
+    var num = 0;
     csv
         .fromStream(stream, {
             headers: true,
             delimiter: '\t'
         })
         .transform(function(obj) {
+            num++;
+            obj.num = num;
             var transformed = transformRecord(obj, resource);
             return transformed;
         })
@@ -522,13 +561,17 @@ var handleFhirResource = function(resource, method) {
             console.log("invalid data")
         })
         .on("data", function(data) {
-            output['fhir'][resource].push(data);
+            output[cat][resource].push(data);
         })
         .on("end", function() {
             console.log("done");
             console.log("Running sequential requests!")
             request(resource);
         });
+} else {
+            request(resource);
+}
+    return deferred.promise;
 }
 
 var summarize = function(source, destination) {
@@ -540,7 +583,7 @@ var summarize = function(source, destination) {
         headers: true,
         delimiter: '\t'
     });
-    var concepts = {} 
+    var concepts = {}
     var total = 0;
     var deferred = Q.defer();
     var formatter = function(input) {
@@ -554,6 +597,7 @@ var summarize = function(source, destination) {
             'units': input['LabUnits'],
             'min': input['min'],
             'max': input['max'],
+            'uuid': uuidv4(),
         }
     }
     console.log("reading" + readfile)
@@ -613,18 +657,35 @@ if (process.argv.length >= 3) {
     if (process.argv[2] == 'genconcepts') {
         summarize('Observation', 'Concept');
     }
+    if (process.argv[2] == 'loadpatients') {
+        postResource('fhir','Patient')
+    }
+    if (process.argv[2] == 'loadmd') {
+        postResource('fhir','Practitioner')
+    }
 
 } else {
 
+    var summa = function() {
+        Object.keys(output).map(function(cat) {
+            console.log(cat);
+            Object.keys(output[cat]).map(function(model) {
+                console.log(' - ' + model + '(' + model.length + ')');
+            });
+
+        });
+        //  console.log(util.inspect(output[args.resource], {showHidden: false, depth: null}))
+    }
     //ui
     vorpal
         .command('genconcepts', 'Generate Lab Dictionary')
         .action(function(args, callback) {
             this.log('generating concepts');
-           summarize('Observation', 'Concept')
-           .done(function() {
-                callback();
-           });
+            summarize('Observation', 'Concept')
+                .done(function() {
+                    summa();
+                    callback();
+                });
         });
 
     vorpal
@@ -632,29 +693,54 @@ if (process.argv.length >= 3) {
         .action(function(args, callback) {
             this.log('trying sql import');
             importRawResource('Concept')
-           .done(function() {
-                callback();
-           });
+                .done(function() {
+                    summa();
+                    callback();
+                });
+        });
+
+    vorpal
+        .command('loadmd', 'Import Practitioners')
+        .action(function(args, callback) {
+            this.log('trying fhir import of practitioners');
+            postResource('fhir','Practitioner')
+                .done(function() {
+                    summa();
+                    callback();
+                });
+        });
+
+    vorpal
+        .command('loadvisittypes', 'Import Visit Types')
+        .action(function(args, callback) {
+            this.log('trying rest import of visit types');
+            importRawResource('visittype')
+                .done(function() {
+                    summa();
+                    callback();
+                });
         });
 
     vorpal
         .command('loadpatients', 'Import Patients')
         .action(function(args, callback) {
             this.log('trying fhir import of patients');
-            postFhirResource('Patient')
-           .done(function() {
-                callback();
-           });
+            postResource('fhir','Patient')
+                .done(function() {
+                    summa();
+                    callback();
+                });
         });
 
     vorpal
         .command('loadencounters', 'Import Visits')
         .action(function(args, callback) {
             this.log('trying fhir import of encounters');
-            postFhirResource('Encounter')
-           .done(function() {
-                callback();
-           });
+            postResource('fhir','Encounter')
+                .done(function() {
+                    summa();
+                    callback();
+                });
         });
 
 
@@ -662,18 +748,21 @@ if (process.argv.length >= 3) {
         .command('loadlabs', 'Import Observations')
         .action(function(args, callback) {
             this.log('trying fhir import of observations');
-            postFhirResource('Observation')
-           .done(function() {
-                callback();
-           });
+            postResource('fhir','Observation')
+                .done(function() {
+                    summa();
+                    callback();
+                });
         });
 
+
+
     vorpal
-        .command('inspect [resource]', 'Print the specified resource')
+        .command('inspect [cat] [resource]', 'Print the specified resource')
         .action(function(args, callback) {
-            this.log('inspecting data in output[' + args.resource  + ']' );
-console.log(output);
-//            console.log(util.inspect(output[args.resource], {showHidden: false, depth: null}))
+            this.log('inspecting data in output[' + args.cat + ']' + '[' + args.resource + ']');
+            console.log(output[args.cat][args.resource]);
+            //            console.log(util.inspect(output[args.resource], {showHidden: false, depth: null}))
             callback();
         });
 
