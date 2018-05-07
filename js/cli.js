@@ -98,14 +98,20 @@ var transformRecord = function(record, resource) {
     return formatter(record);
 }
 
-var visittype = [{
+
+var initResources = function() {
+var deferred = Q.defer();
+
+
+var visit_type = {
     date_created: new Date().toMysqlFormat(),
-    visit_type_id:1,
-    creator:1,
-    name:"inpatient",
-    description:"Inpatient Visit"
-}]
-output['raw']['visittype'] = [visittype];
+    visit_type_id: 1,
+    creator: 1,
+    uuid: '30e23a41-7723-41f8-ac57-db22f01ebbba',
+    name: "inpatient",
+    description: "Inpatient Visit"
+}
+output['raw']['visit_type'] = [visit_type];
 
 var practitioner = {
     "resourceType": "Practitioner",
@@ -122,10 +128,39 @@ var practitioner = {
         use: "home",
         city: "E. Kanateng"
     }],
-    gender: "male", 
+    gender: "male",
     birthDate: "2010-04-03T00:00:00"
 }
 output['fhir']['Practitioner'] = [practitioner]
+
+
+return readResource('raw','Concept');
+
+}
+
+
+function readResource(cat,resource) {
+output[cat][resource] = [];
+    var filename = config.files[resource]
+    var stream = fs.createReadStream(filename);
+var deferred = Q.defer();
+    csv
+        .fromStream(stream, {
+            headers: true,
+            delimiter: '\t'
+        })
+        .on("data", function(data) {
+            output[cat][resource].push(data);
+        })
+        .on("end", function() {
+            console.log("Running raw requests")
+            deferred.resolve();
+        });
+    return deferred.promise;
+}
+
+
+
 
 // create fhir compatible patient object
 var patientFormatter = function(record) {
@@ -154,7 +189,7 @@ var patientFormatter = function(record) {
         return digit;
     }
     var uuid = record.PatientID.toLowerCase();
-    var num = (new Date).getTime().toString().substring(8,13) + record.num;
+    var num = (new Date).getTime().toString().substring(8, 13) + record.num;
     var checkdigit = luhnCheckDigit(num);
     var OpenMRSID = num + '-' + checkdigit;
     var gender = record.PatientGender.toLowerCase();
@@ -311,11 +346,21 @@ var encounterFormatter = function(record) {
 observationFormatter = function(record) {
     var date = new Date(record.LabDateTime).toISOString();
     var patient_uuid = record.PatientID.toLowerCase();
+var concept_uuid;
+for(i in output['raw']['Concept']) {
+var concept =  output['raw']['Concept'][i];
+if (concept['LabName'] == record.LabName) {
+concept_uuid = concept['uuid'];
+}
+
+}
+
     var observation = {
         "resourceType": "Observation",
         "code": {
             "coding": [{
-                "code": record.LabName
+"system": "http://openmrs.org",
+                "code": concept_uuid
             }]
         },
         "subject": {
@@ -344,8 +389,51 @@ var observationTransformer = function(record) {
 //process text files for import
 var importRawResource = function(resource) {
     var deferred = Q.defer();
+    var promises = output['raw'][resource].map(
+        function iterator(record) {
+            console.log('record');
+            console.log(record);
+            var sql = "INSERT INTO " + resource + " (" + Object.keys(record).join(",") + ") values (\"" + Object.values(record).join("\",\"") + "\")";
+            console.log(sql);
+            var dbpromise = db
+                .query(sql)
+                .then(
+                    function handleResponse(results) {
+                        return results;
+                    },
+                    function handleError(error) {
+                        if (error.sqlMessage !== undefined) {
+                            console.log(error.sqlMessage);
+                        }
+                        return 0
+                    }
+                )
+                .catch(function(err) {
+                    console.log(err);
+                    return 0
+                });
+            return dbpromise;
+        })
+
+    Q.allSettled(promises)
+        .then(
+            function handleSettled(sn2) {
+                pool.end();
+                return deferred.resolve();
+            }
+        )
+        .catch(function(err) {
+            pool.end();
+            return deferred.reject();
+        });
+    return deferred.promise;
+}
+var importConcepts = function() {
+    var resource = 'Concept';
+    var deferred = Q.defer();
     var filename = config.files[resource]
     var stream = fs.createReadStream(filename);
+   // var updated = [];
     output['raw'][resource] = []
     //perform database inserts
     function rawRequest(resource) {
@@ -405,8 +493,8 @@ var importRawResource = function(resource) {
                                 daughters[n] = daughter;
                             }
                             //set id for dependant records
-                            delete r.concept;
-                            return daughters;
+                            //delete r.concept;
+                            return true;
                         },
                         function handleError(error) {
                             if (error.sqlMessage !== undefined) {
@@ -462,31 +550,31 @@ var importRawResource = function(resource) {
 }
 
 //process text files for FHIR import
-var postResource = function(cat,resource) {
+var postResource = function(cat, resource) {
+    var updated = []
+    count = 0, failcount = 0, successcount = 0
     var deferred = Q.defer();
-    var uri = config.url 
-if(cat == 'fhir') {
-    uri = uri + '/fhir/' + resource
-} else {
-    uri = uri + '/rest/v1/' + resource.toLowerCase();
-}
+    if (cat == 'fhir') {
+        var baseuri = config.url + '/fhir/' + resource
+    } else {
+        var baseuri = config.url + '/rest/v1/' + resource.toLowerCase();
+    }
 
     function request(resource, count) {
-        //console.log('request');
-        //console.log({count});
         var handleRecord = function(record) {
 
 
-if(record.id !== undefined) {
-    var method = 'PUT';
-    uri = uri + '/' + record.id;
-} else {
-    var method = 'POST';
-}
-            //console.log(record);
+            if (record.id !== undefined) {
+                var method = 'PUT';
+                var uri = baseuri + '/' + record.id;
+            } else {
+                var method = 'POST';
+                var uri = baseuri;
+            }
             var options = {
                 method: method,
                 uri: uri,
+                resolveWithFullResponse: true,
                 headers: {
                     "Authorization": config.auth
                 },
@@ -499,6 +587,7 @@ if(record.id !== undefined) {
         var promises = new Array(stepsize);
         if (count > output[cat][resource].length) {
             deferred.resolve();
+            output[cat][resource] = updated;
             return
         } else if (count == undefined) {
             count = 0
@@ -511,16 +600,23 @@ if(record.id !== undefined) {
         }
         Q.allSettled(promises)
             .then(function(results) {
-                results.forEach(function(result) {
-                    //console.log(JSON.stringify(result));
+                for (var b in results) {
+                    //var record_num = (Number(b) + Number(count).toString();
+                    //console.log(Number(b) + Number(count));
+                    var result = results[b];
                     if (result.state === "fulfilled") {
+                        console.log(result.value.request.body);
+                        var loc = result.value.headers['location']
+                        var uuid = loc.split("\/").pop()
+                        var rec = JSON.parse(result.value.request.body);
+                        rec['id'] = uuid;
+updated.push(rec);
                         successcount++
-                        //var value = result.value;
                     } else {
-                        //var reason = result.reason;
                         failcount++
                     }
-                });
+                }
+
                 console.log({
                     count,
                     stepsize
@@ -538,39 +634,39 @@ if(record.id !== undefined) {
             });
     }
 
-if(config.files[resource] !==undefined  &&  output[cat][resource]  === undefined) {
-    output[cat][resource] = []
-    var filename = config.files[resource]
-    var stream = fs.createReadStream(filename);
-    var num = 0;
-    csv
-        .fromStream(stream, {
-            headers: true,
-            delimiter: '\t'
-        })
-        .transform(function(obj) {
-            num++;
-            obj.num = num;
-            var transformed = transformRecord(obj, resource);
-            return transformed;
-        })
-        .validate(function(data) {
-            return data.resourceType !== undefined; //resources need type
-        })
-        .on("data-invalid", function(data) {
-            console.log("invalid data")
-        })
-        .on("data", function(data) {
-            output[cat][resource].push(data);
-        })
-        .on("end", function() {
-            console.log("done");
-            console.log("Running sequential requests!")
-            request(resource);
-        });
-} else {
-            request(resource);
-}
+    if (config.files[resource] !== undefined && output[cat][resource] === undefined) {
+        output[cat][resource] = []
+        var filename = config.files[resource]
+        var stream = fs.createReadStream(filename);
+        var num = 0;
+        csv
+            .fromStream(stream, {
+                headers: true,
+                delimiter: '\t'
+            })
+            .transform(function(obj) {
+                num++;
+                obj.num = num;
+                var transformed = transformRecord(obj, resource);
+                return transformed;
+            })
+            .validate(function(data) {
+                return data.resourceType !== undefined; //resources need type
+            })
+            .on("data-invalid", function(data) {
+                console.log("invalid data")
+            })
+            .on("data", function(data) {
+                output[cat][resource].push(data);
+            })
+            .on("end", function() {
+                console.log("done");
+                console.log("Running sequential requests!")
+                request(resource);
+            });
+    } else {
+        request(resource);
+    }
     return deferred.promise;
 }
 
@@ -652,120 +748,124 @@ var summarize = function(source, destination) {
     return deferred.promise;
 }
 
+//output data dimensions
+var summa = function() {
+    Object.keys(output).map(function(cat) {
+        console.log(cat);
+        Object.keys(output[cat]).map(function(model) {
+            console.log(' - ' + model + '(' + model.length + ')');
+        });
+
+    });
+}
+
+
+//ui
+vorpal
+    .command('genconcepts', 'Generate Lab Dictionary')
+    .action(function(args, callback) {
+        this.log('generating concepts');
+        summarize('Observation', 'Concept')
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+vorpal
+    .command('init', 'Initialize Resources')
+    .action(function(args, callback) {
+        this.log('initializing resources');
+        initResources()
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+vorpal
+    .command('loadconcepts', 'Import Dictionary')
+    .action(function(args, callback) {
+        this.log('trying sql import');
+        importConcepts()
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+vorpal
+    .command('loadvisittypes', 'Import Visit Types')
+    .action(function(args, callback) {
+        this.log('trying rest import of visit types');
+        importRawResource('visit_type')
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+vorpal
+    .command('loadmd', 'Import Practitioners')
+    .action(function(args, callback) {
+        this.log('trying fhir import of practitioners');
+        postResource('fhir', 'Practitioner')
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+
+vorpal
+    .command('loadpatients', 'Import Patients')
+    .action(function(args, callback) {
+        this.log('trying fhir import of patients');
+        postResource('fhir', 'Patient')
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+vorpal
+    .command('loadencounters', 'Import Visits')
+    .action(function(args, callback) {
+        this.log('trying fhir import of encounters');
+        postResource('fhir', 'Encounter')
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+
+vorpal
+    .command('loadlabs', 'Import Observations')
+    .action(function(args, callback) {
+        this.log('trying fhir import of observations');
+        postResource('fhir', 'Observation')
+            .done(function() {
+                summa();
+                callback();
+            });
+    });
+
+
+
+vorpal
+    .command('inspect [cat] [resource]', 'Print the specified resource')
+    .action(function(args, callback) {
+        this.log('inspecting data in output[' + args.cat + ']' + '[' + args.resource + ']');
+        console.log(output[args.cat][args.resource]);
+        callback();
+    });
 
 if (process.argv.length >= 3) {
-    if (process.argv[2] == 'genconcepts') {
-        summarize('Observation', 'Concept');
-    }
-    if (process.argv[2] == 'loadpatients') {
-        postResource('fhir','Patient')
-    }
-    if (process.argv[2] == 'loadmd') {
-        postResource('fhir','Practitioner')
-    }
-
+    vorpal.exec(process.argv[2]).then(function(data) {
+        console.log('fin');
+    })
 } else {
-
-    var summa = function() {
-        Object.keys(output).map(function(cat) {
-            console.log(cat);
-            Object.keys(output[cat]).map(function(model) {
-                console.log(' - ' + model + '(' + model.length + ')');
-            });
-
-        });
-        //  console.log(util.inspect(output[args.resource], {showHidden: false, depth: null}))
-    }
-    //ui
-    vorpal
-        .command('genconcepts', 'Generate Lab Dictionary')
-        .action(function(args, callback) {
-            this.log('generating concepts');
-            summarize('Observation', 'Concept')
-                .done(function() {
-                    summa();
-                    callback();
-                });
-        });
-
-    vorpal
-        .command('loadconcepts', 'Import Dictionary')
-        .action(function(args, callback) {
-            this.log('trying sql import');
-            importRawResource('Concept')
-                .done(function() {
-                    summa();
-                    callback();
-                });
-        });
-
-    vorpal
-        .command('loadmd', 'Import Practitioners')
-        .action(function(args, callback) {
-            this.log('trying fhir import of practitioners');
-            postResource('fhir','Practitioner')
-                .done(function() {
-                    summa();
-                    callback();
-                });
-        });
-
-    vorpal
-        .command('loadvisittypes', 'Import Visit Types')
-        .action(function(args, callback) {
-            this.log('trying rest import of visit types');
-            importRawResource('visittype')
-                .done(function() {
-                    summa();
-                    callback();
-                });
-        });
-
-    vorpal
-        .command('loadpatients', 'Import Patients')
-        .action(function(args, callback) {
-            this.log('trying fhir import of patients');
-            postResource('fhir','Patient')
-                .done(function() {
-                    summa();
-                    callback();
-                });
-        });
-
-    vorpal
-        .command('loadencounters', 'Import Visits')
-        .action(function(args, callback) {
-            this.log('trying fhir import of encounters');
-            postResource('fhir','Encounter')
-                .done(function() {
-                    summa();
-                    callback();
-                });
-        });
-
-
-    vorpal
-        .command('loadlabs', 'Import Observations')
-        .action(function(args, callback) {
-            this.log('trying fhir import of observations');
-            postResource('fhir','Observation')
-                .done(function() {
-                    summa();
-                    callback();
-                });
-        });
-
-
-
-    vorpal
-        .command('inspect [cat] [resource]', 'Print the specified resource')
-        .action(function(args, callback) {
-            this.log('inspecting data in output[' + args.cat + ']' + '[' + args.resource + ']');
-            console.log(output[args.cat][args.resource]);
-            //            console.log(util.inspect(output[args.resource], {showHidden: false, depth: null}))
-            callback();
-        });
-
     vorpal
         .delimiter('mrsman$')
         .show();

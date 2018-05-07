@@ -13,3 +13,12 @@ mvn openmrs-sdk:create-project
 
 #bring up a server
 mvn clean install openmrs-sdk:run
+
+
+
+
+#resources
+https://medium.com/@awatson1978/hl7-v2-to-fhir-interface-mapping-f83c6ecf6bee
+
+#special notes:
+mirthconnect only works with the official sun/oracle version of java
