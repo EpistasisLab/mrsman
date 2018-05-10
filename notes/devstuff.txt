@@ -7,6 +7,7 @@ mvn openmrs-sdk:delete
 
 #create a new server
 mvn openmrs-sdk:setup
+#mvn openmrs-sdk:setup  -DserverId=odie -Dplatform=2.0.1  -DdbUri=jdbc:mysql://localhost:3306/odie -DdbUser=root -DdbPassword=password -DjavaHome="/opt/jdk1.8.0_161"
 
 #create a new project
 mvn openmrs-sdk:create-project

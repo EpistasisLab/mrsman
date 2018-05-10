@@ -9,6 +9,7 @@
     "blessed-contrib": "^4.8.5",
     "cypher-stream": "^1.1.0",
     "fast-csv": "^2.4.1",
+    "json-to-cypher": "^1.0.0",
     "luhn-mod-n": "^1.0.1",
     "mysql": "^2.15.0",
     "node-csv-parse": "^1.2.0",
@@ -20,6 +21,7 @@
     "request-promise": "^4.2.2",
     "stream-transform": "^1.0.2",
     "telnet2": "0.0.1",
-    "vorpal": "^1.12.0"
+    "vorpal": "^1.12.0",
+    "xml-js": "^1.6.2"
   }
 }
