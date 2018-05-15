@@ -2,6 +2,7 @@ var BaseModel = require('./base_model'),
     util = require('util');
 function ConceptModel() {
     BaseModel.apply(this, arguments);
+    this.resourceType = 'Observation';
 }
 util.inherits(ConceptModel, BaseModel);
 
