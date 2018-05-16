@@ -1,4 +1,4 @@
-var BaseModel = require('./base_model'),
+var BaseModel = require('./Base'),
     util = require('util');
 function ConceptModel() {
     BaseModel.apply(this, arguments);

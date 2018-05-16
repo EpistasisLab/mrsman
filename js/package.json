@@ -13,6 +13,7 @@
     "luhn-mod-n": "^1.0.1",
     "mysql": "^2.15.0",
     "node-csv-parse": "^1.2.0",
+    "node-neo4j": "^2.0.3",
     "node-random-name": "^1.0.1",
     "node-uuid": "^1.4.8",
     "q": "^1.0.0",

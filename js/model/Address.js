@@ -1,11 +1,11 @@
-var BaseModel = require('./base_model'),
+var BaseModel = require('./Base'),
     util = require('util');
 //an address, city or any other kind of geographical domain
-function PlaceModel() {
-    this.resourceType = 'Place';
+function AddressModel() {
+    this.resourceType = 'Address';
     BaseModel.apply(this, arguments);
 }
 
 }
-util.inherits(PatientModel, BaseModel);
-module.exports = PatientModel;
+util.inherits(AddressModel, BaseModel);
+module.exports = AddressModel;
