@@ -6,11 +6,11 @@ const rp = require('request-promise');
 const fs = require('fs')
 const vorpal = require('vorpal')();
 const util = require('util')
-const cypher = require('cypher-stream')('bolt://localhost', 'neo4j', 'password');
-//var Patient = require('./model/Patient');
+//const cypher = require('cypher-stream')('bolt://localhost', 'neo4j', 'password');
+const neo4j = require('node-neo4j');
+var db = new neo4j('http://neo4j:password@localhost:7474');
 const Objects = require('./model');
-//var Observation = require('./model/Observation');
-//var Visit = require('./model/Visit');
+
 
 // configs
 var config = require('./config');
@@ -65,20 +65,15 @@ var processPatients = function(patients, i) {
 var p = readResource('DemoPatients');
 p.then(function(data) {
     processPatients(data, 0).then(function(patients) {
-        console.log('done patients');
-        // console.log(patients);
+        promises = [];
         for (var i in patients) {
+            var promise = Q.defer();
+            promises.push(promise);
             var patient = patients[i];
-            var p = patient.resolve_promises(patient);
-            p.then(function(data) {
-                data.getObs();
-                output.push(data);
+            patient.sync(patient).then(function(data) {
+                var json = JSON.stringify(data);
+                fs.writeFile('patients.json', json, 'utf8');
             });
         }
     });
-});
-//output[1].Encounter[1].getObs()
-var observation = new Objects['Observation']({id:'cbce9ee4-1691-11df-97a5-7038c432aabf'}).get();
-observation.then(function(data) {
-console.log(data);
 });

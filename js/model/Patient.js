@@ -1,4 +1,4 @@
-var BaseModel = require('./base_model'),
+var BaseModel = require('./Base'),
     util = require('util'),
     Encounter = require('./Encounter'),
     Q = require('q');
@@ -43,33 +43,23 @@ function PatientModel() {
 
         delete this.extended;
     }
+    if (this['0'] !== undefined) {
+delete this['0'];
+    }
 
 }
 
-var handle_extended = function(data) {
-    this.Encounter = [];
-    for (var i in data) {
-        var encounter = new Encounter(data[i].value);
-        encounter.getObs();
-        this.Encounter.push(encounter);
-    }
-    return this;
-};
 
-PatientModel.prototype.getObs = function() {
-    for (i in this.Encounter) {
-    this.Encounter[i].getObs();
-    }
-}
 
-PatientModel.prototype.resolve_promises = function() {
+//fetch all objects associated with a patient
+PatientModel.prototype.sync = function() {
     var deferred = Q.defer();
     var promises = []
-    var that = this;
+    var patient = this;
     //iterate over child-objects 
-    for (key in this) {
-        if (typeof(this[key]) === 'object') {
-            var obj = this[key]
+    for (key in patient) {
+        if (typeof(patient[key]) === 'object') {
+            var obj = patient[key]
             for (var i in obj) {
                 if (typeof(obj[i]) == 'object' && Q.resolve(obj[i]) == obj[i]) {
                     promises.push(obj[i]);
@@ -78,15 +68,28 @@ PatientModel.prototype.resolve_promises = function() {
         }
     }
     Q.allSettled(promises).then(function(data) {
-        that.Encounter = [];
+        patient.Encounter = [];
         for (var i in data) {
             var encounter = new Encounter(data[i].value);
-            that.Encounter.push(encounter);
+            patient.Encounter.push(encounter);
         }
-        deferred.resolve(that);
+        deferred.resolve(patient);
     })
     return deferred.promise;
 };
+
+
+PatientModel.prototype.gencypher = function() {
+    var create = [];
+    var params = [];
+    for (key in this) {
+        if (['string', 'boolean'].indexOf(typeof(this[key])) >= 0) {
+            params.push(key + ': \"' + this[key] + '\"');
+        }
+    }
+};
+
+
 
 
 util.inherits(PatientModel, BaseModel);
