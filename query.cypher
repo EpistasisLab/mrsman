@@ -8,16 +8,16 @@ FOREACH (encounter in b.Encounter |
     MERGE (c:Encounter {id:encounter.id, resourceType:'Encounter'})
     CREATE (p)-[:encountered]->(c)
     FOREACH (observation in encounter.Observation | 
-        CREATE (o:Observation {id:observation.id, resourceType:'Observation'})
-        CREATE UNIQUE (c)-[:observed]->(o)
+        MERGE (o:Observation {id:observation.id, resourceType:'Observation'})
+        MERGE (c)-[:spawned]->(o)
     )
     FOREACH (practitioner in encounter.Practitioner | 
-        CREATE (dr:Practitioner {id:practitioner.id, resourceType:'Practitioner'})
-        CREATE UNIQUE (dr)-[:waspresent]->(c)
+        MERGE (dr:Practitioner {id:practitioner.id, resourceType:'Practitioner'})
+        MERGE (c)-[:by]->(dr)
     )
     FOREACH (location in encounter.Location | 
-        CREATE (l:Location {id:location.id, resourceType:'Location'})
-        CREATE UNIQUE (c)-[:at]->(l)
+        MERGE (l:Location {id:location.id, resourceType:'Location'})
+        MERGE (c)-[:at]->(l)
     )
 )
 
