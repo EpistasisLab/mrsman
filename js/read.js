@@ -25,7 +25,6 @@ function readResource(resource) {
     if (fs.existsSync(filename)) {
         fs.readFile(filename, 'utf8', function(err, data) {
             if (err) throw err;
-            var patients = [];
             var obj = JSON.parse(data);
             for (var i in obj.entry) {
                 var record = obj.entry[i].resource;
@@ -48,7 +47,7 @@ var processPatients = function(patients, i) {
         deferred.resolve(patients)
     } else {
         var patient = new Objects['Patient'](patients[i])
-        patient.getextended().then(function(data) {
+        patient.get_extended().then(function(data) {
             patient.extended = data;
             patient = new Objects['Patient'](patient)
             patients[i] = patient;
@@ -72,7 +71,8 @@ p.then(function(data) {
             var patient = patients[i];
             patient.sync(patient).then(function(data) {
                 var json = JSON.stringify(data);
-                fs.writeFile('patients.json', json, 'utf8');
+console.log(data.id);
+                fs.writeFile(config.patient_dir +  '/' + data.id + '.json', json, 'utf8', function(data){console.log('done')});
             });
         }
     });
