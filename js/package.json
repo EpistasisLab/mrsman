@@ -12,6 +12,7 @@
     "json-to-cypher": "^1.0.0",
     "luhn-mod-n": "^1.0.1",
     "mysql": "^2.15.0",
+    "neo4j-driver": "^1.6.1",
     "node-csv-parse": "^1.2.0",
     "node-neo4j": "^2.0.3",
     "node-random-name": "^1.0.1",

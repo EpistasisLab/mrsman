@@ -1,4 +1,4 @@
-WITH 'file:///share/devel/mrsman/example.json' AS url
+WITH 'file:///share/devel/mrsman/data/Patient/fbe0ab72-ef35-459c-9b7b-7b32fb29819c.json' AS url
 CALL apoc.load.json(url) YIELD value as b
 
 WITH b, b.Encounter as encounters
@@ -10,10 +10,6 @@ FOREACH (encounter in b.Encounter |
     FOREACH (observation in encounter.Observation | 
         MERGE (o:Observation {id:observation.id, resourceType:'Observation'})
         MERGE (c)-[:spawned]->(o)
-    )
-    FOREACH (practitioner in encounter.Practitioner | 
-        MERGE (dr:Practitioner {id:practitioner.id, resourceType:'Practitioner'})
-        MERGE (c)-[:by]->(dr)
     )
     FOREACH (location in encounter.Location | 
         MERGE (l:Location {id:location.id, resourceType:'Location'})

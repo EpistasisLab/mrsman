@@ -6,11 +6,7 @@ const xml2js = require('xml2js');
 
 function BaseModel(obj) {
     this.resourceType = 'Base'
-    for (key in obj) {
-        if (key != 'use') {
-            this[key] = obj[key];
-        }
-    }
+    //    this.format(obj);
 }
 
 
@@ -33,7 +29,7 @@ BaseModel.prototype.gencypher = function() {
 
 
 
-BaseModel.prototype.getextended = function() {
+BaseModel.prototype.get_extended = function() {
     var deferred = Q.defer();
     if (['Patient', 'Encounter'].indexOf(this.resourceType) >= 0) {
         var parseextended = function(data) {
@@ -71,10 +67,10 @@ BaseModel.prototype.getextended = function() {
         var that = this;
         promise.then(function(result) {
             if (result.statusCode == 200) {
-
                 xml2js.parseString(result.body, {
                     trim: true
                 }, function(err, extended) {
+                    //console.log(extended);
                     deferred.resolve(parseextended(extended));
                 });
 
@@ -98,7 +94,6 @@ BaseModel.prototype.getextended = function() {
 BaseModel.prototype.get = function() {
     var deferred = Q.defer();
     console.log('getting ' + this.resourceType);
-    console.log('foo');
     var uri = config.url + '/fhir/' + this.resourceType + '/' + this.id;
     var method = 'GET';
     var options = {
@@ -117,6 +112,26 @@ BaseModel.prototype.get = function() {
 }
 
 
+BaseModel.prototype.format = function(obj) {
+    var obj = JSON.parse(JSON.stringify(obj));
+    if (obj.id) {
+        this.id = obj.id;
+    }
+    if (this.resourceType !== undefined && obj[this.resourceType] !== undefined) {
+        this.id = obj[this.resourceType][0]['id']
+        delete obj[this.resourceType]
+    }
+}
+
+BaseModel.prototype.gencypher = function() {
+    var create = [];
+    var params = [];
+    for (key in this) {
+        if (['string', 'boolean'].indexOf(typeof(this[key])) >= 0) {
+            params.push(key + ': \"' + this[key] + '\"');
+        }
+    }
+};
 
 
 
