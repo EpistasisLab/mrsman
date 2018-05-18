@@ -3,50 +3,16 @@ var BaseModel = require('./Base'),
     Encounter = require('./Encounter'),
     Q = require('q');
 
-function PatientModel() {
-    this.resourceType = 'Patient';
+function PatientModel(obj) {
     BaseModel.apply(this, arguments);
-    //format variables 
-    if (this.identifier) {
-        for (var i in this.identifier) {
-            if (this.identifier[i].system == 'OpenMRS Identification Number') {
-                this.openmrs_id = this.identifier[i].value;
-            }
-        }
-        delete this.identifier;
-    }
-    if (this.name) {
-        for (var i in this.name) {
-            this[i] = this.name[i];
-        }
-        this.firstname = this.name[0].given[0];
-        this.lastname = this.name[0].family;
-        delete this.name;
-    }
-    if (this.address) {
-        this.city = this.address[0].city
-        delete this.city;
-    }
-    if (this.extended) {
-        for (var prop in this.extended) {
-            if (prop === 'Encounter') {
-                var promises = [];
-                for (var i in this.extended[prop]) {
-                    promises.push(new Encounter(this.extended[prop][i]).getextended());
-
-                }
-
-                //    console.log(promises);
-                this[prop] = promises;
-            }
-        }
-
-        delete this.extended;
-    }
-    if (this['0'] !== undefined) {
-delete this['0'];
-    }
-
+    this.resourceType = 'Patient';
+    this.firstname = '';
+    this.lastname = '';
+    this.birthDate = '',
+    this.deceasedBoolean = '',
+    this.gender = '',
+    this.city = '';
+    this.format(obj);
 }
 
 
@@ -79,17 +45,43 @@ PatientModel.prototype.sync = function() {
 };
 
 
-PatientModel.prototype.gencypher = function() {
-    var create = [];
-    var params = [];
-    for (key in this) {
-        if (['string', 'boolean'].indexOf(typeof(this[key])) >= 0) {
-            params.push(key + ': \"' + this[key] + '\"');
+PatientModel.prototype.format = function(obj) {
+    var obj = JSON.parse(JSON.stringify(obj));
+for( var i in obj) {
+if (this[i] == '') {
+this[i] = obj[i];
+}
+}
+    if (obj.id) {
+        this.id = obj.id;
+    }
+    if (obj.identifier) {
+        for (var i in obj.identifier) {
+            if (obj.identifier[i].system == 'OpenMRS Identification Number') {
+                this.openmrs_id = obj.identifier[i].value;
+            }
         }
     }
-};
+    if (obj.name) {
+        this.firstname = obj.name[0].given[0];
+        this.lastname = obj.name[0].family;
+    }
+    if (obj.address) {
+        this.city = obj.address[0].city
+    }
+    if (obj.extended) {
+        for (var prop in obj.extended) {
+            if (prop === 'Encounter') {
+                var promises = [];
+                for (var i in obj.extended[prop]) {
+                    promises.push(new Encounter(obj.extended[prop][i]).get_extended());
 
-
+                }
+                this.Encounter = promises;
+            }
+        }
+    }
+}
 
 
 util.inherits(PatientModel, BaseModel);

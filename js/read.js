@@ -6,11 +6,11 @@ const rp = require('request-promise');
 const fs = require('fs')
 const vorpal = require('vorpal')();
 const util = require('util')
-//const cypher = require('cypher-stream')('bolt://localhost', 'neo4j', 'password');
-const neo4j = require('node-neo4j');
-var db = new neo4j('http://neo4j:password@localhost:7474');
+const path = require('path')
 const Objects = require('./model');
-
+//const cypher = require('cypher-stream')('bolt://localhost', 'neo4j', 'password');
+var neo4j = require('neo4j-driver');
+var driver = neo4j.v1.driver("bolt://localhost", neo4j.v1.auth.basic("neo4j", "password"));
 
 // configs
 var config = require('./config');
@@ -58,21 +58,42 @@ var processPatients = function(patients, i) {
 
 }
 
+var patient_cypher = fs.readFileSync(config.dirs.cypher + 'patient.cypher', 'utf8');
+
 
 
 
 var p = readResource('DemoPatients');
 p.then(function(data) {
     processPatients(data, 0).then(function(patients) {
-        promises = [];
         for (var i in patients) {
-            var promise = Q.defer();
-            promises.push(promise);
+            var nnd = Q.defer();
             var patient = patients[i];
             patient.sync(patient).then(function(data) {
                 var json = JSON.stringify(data);
-console.log(data.id);
-                fs.writeFile(config.patient_dir +  '/' + data.id + '.json', json, 'utf8', function(data){console.log('done')});
+                var filename = path.resolve(config.dirs.Patient) + '/' + data.id + '.json';
+                var nd = Q.defer();
+                fs.writeFile(filename, json, 'utf8', function(result) {
+                    var fn = "file://" + filename;
+                    session = driver.session();
+                    session
+                        .run(patient_cypher, {
+                            url: fn
+                        })
+                        .then(function(result) {
+                            result.records.forEach(function(record) {
+                                console.log(record.get('count(*)'));
+                            });
+                            nd.resolve('done');
+                            //              session.close();
+                        })
+                        .catch(function(error) {
+                            console.log(error);
+                        });
+                });
+                nd.promise.then(function(foo) {
+                    console.log('foo');
+                })
             });
         }
     });
