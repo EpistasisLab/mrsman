@@ -6,7 +6,6 @@ const xml2js = require('xml2js');
 
 function BaseModel(obj) {
     this.resourceType = 'Base'
-    //    this.format(obj);
 }
 
 
@@ -44,7 +43,8 @@ BaseModel.prototype.get_extended = function() {
                 }
                 var resource_id = resource_value[0]['id'][0]['$']['value'];
                 parsed[resource_type].push({
-                    id: resource_id
+                    id: resource_id, 
+                    raw:resource_value[0]
                 });
             }
             return parsed;
@@ -117,6 +117,12 @@ BaseModel.prototype.format = function(obj) {
     if (obj.id) {
         this.id = obj.id;
     }
+  for (var i in obj) {
+        if (this[i] == '') {
+            this[i] = obj[i];
+        }
+    }
+
     if (this.resourceType !== undefined && obj[this.resourceType] !== undefined) {
         this.id = obj[this.resourceType][0]['id']
         delete obj[this.resourceType]

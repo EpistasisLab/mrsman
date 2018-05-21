@@ -10,7 +10,7 @@ const path = require('path')
 const Objects = require('./model');
 //const cypher = require('cypher-stream')('bolt://localhost', 'neo4j', 'password');
 var neo4j = require('neo4j-driver');
-var driver = neo4j.v1.driver("bolt://localhost", neo4j.v1.auth.basic("neo4j", "password"));
+var driver = neo4j.v1.driver("bolt://127.0.0.1", neo4j.v1.auth.basic("neo4j", "password"));
 
 // configs
 var config = require('./config');
@@ -67,7 +67,6 @@ var p = readResource('DemoPatients');
 p.then(function(data) {
     processPatients(data, 0).then(function(patients) {
         for (var i in patients) {
-            var nnd = Q.defer();
             var patient = patients[i];
             patient.sync(patient).then(function(data) {
                 var json = JSON.stringify(data);
@@ -92,7 +91,6 @@ p.then(function(data) {
                         });
                 });
                 nd.promise.then(function(foo) {
-                    console.log('foo');
                 })
             });
         }
