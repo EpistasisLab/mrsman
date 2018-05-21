@@ -66,18 +66,63 @@ var getPatients = function() {
 
 
 //function to generate patient object from raw data
-var processPatient = function(patient) {
+var processPatients = function(patients,i) {
+var length = 5
     var deferred = Q.defer();
-        var patient = new Objects['Patient'](patient)
+    if (i > length) {
+        deferred.resolve('fin')
+    } else {
+        var patient = new Objects['Patient'](patients[i])
         patient.get_extended().then(function(data) {
             patient.extended = data;
             patient = new Objects['Patient'](patient)
-            deferred.resolve(patient);
+            //deferred.resolve(patient);
+
+            patient.sync(patient).then(function(data) {
+                if (!debug) {
+                    var json = JSON.stringify(data);
+                    var filename = path.resolve(config.dirs.Patient) + '/' + data.id + '.json';
+                    var nd = Q.defer();
+                    fs.writeFile(filename, json, 'utf8', function(result) {
+                        var fn = "file://" + filename;
+                        session = neo.session();
+                        session
+                            .run(patient_cypher, {
+                                url: fn
+                            })
+                            .then(function(result) {
+                                result.records.forEach(function(record) {
+                                    console.log(record.get('count(*)'));
+                                });
+                                session.close();
+                                nd.resolve(processPatients(patients,i+1));
+                                if (i == length) {
+                                    neo.close();
+                                }
+                            })
+                            .catch(function(error) {
+                                console.log(error);
+                            });
+                    });
+                    nd.promise.then(function(foo) {
+                                console.log(foo);
+                    })
+                } else {
+                    console.log(JSON.stringify(data));
+                }
+
+            });
+
+
+
+
+
         })
+        }
     return deferred.promise;
 }
 //function to generate patient objects from raw data
-var processPatients = function(patients, i) {
+var processPatientz = function(patients, i) {
     var deferred = Q.defer();
     if (i >= patients.length) {
         deferred.resolve(patients)
@@ -100,39 +145,12 @@ var patient_cypher = fs.readFileSync(config.dirs.cypher + 'patient.cypher', 'utf
 
 //load patient data
 var p = readResource('Patient');
-p.then(function(data) {
+    p.then(function(data) {
     var i=0;
-    processPatient(data[1]).then(function(patient) {
-            patient.sync(patient).then(function(data) {
-                if (!debug) {
-                    var json = JSON.stringify(data);
-                    var filename = path.resolve(config.dirs.Patient) + '/' + data.id + '.json';
-                    var nd = Q.defer();
-                    fs.writeFile(filename, json, 'utf8', function(result) {
-                        var fn = "file://" + filename;
-                        session = neo.session();
-                        session
-                            .run(patient_cypher, {
-                                url: fn
-                            })
-                            .then(function(result) {
-                                result.records.forEach(function(record) {
-                                    console.log(record.get('count(*)'));
-                                });
-                                nd.resolve('done');
-                            })
-                            .catch(function(error) {
-                                console.log(error);
-                            });
-                    });
-                    nd.promise.then(function(foo) {
-                                console.log(foo);
+    processPatients(data,0).then(function(pt) {
+console.log(pt);
                                 neo.close();
-                    })
-                } else {
-                    console.log(JSON.stringify(data));
-                }
-            });
+                                neo.close();
     });
 
 
