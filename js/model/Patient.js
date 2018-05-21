@@ -9,9 +9,9 @@ function PatientModel(obj) {
     this.firstname = '';
     this.lastname = '';
     this.birthDate = '',
-    this.deceasedBoolean = '',
-    this.gender = '',
-    this.city = '';
+        this.deceasedBoolean = '',
+        this.gender = '',
+        this.city = '';
     this.format(obj);
 }
 
@@ -36,8 +36,10 @@ PatientModel.prototype.sync = function() {
     Q.allSettled(promises).then(function(data) {
         patient.Encounter = [];
         for (var i in data) {
-            var encounter = new Encounter(data[i].value);
-            patient.Encounter.push(encounter);
+            if (Object.getOwnPropertyNames(data[i].value).length > 0) {
+                var encounter = new Encounter(data[i].value);
+                patient.Encounter.push(encounter);
+            }
         }
         deferred.resolve(patient);
     })
@@ -47,11 +49,11 @@ PatientModel.prototype.sync = function() {
 
 PatientModel.prototype.format = function(obj) {
     var obj = JSON.parse(JSON.stringify(obj));
-for( var i in obj) {
-if (this[i] == '') {
-this[i] = obj[i];
-}
-}
+    for (var i in obj) {
+        if (this[i] == '') {
+            this[i] = obj[i];
+        }
+    }
     if (obj.id) {
         this.id = obj.id;
     }
