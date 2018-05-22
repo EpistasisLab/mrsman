@@ -66,10 +66,9 @@ var getPatients = function() {
 
 
 //function to generate patient object from raw data
-var processPatients = function(patients,i) {
-var length = 5
+var processPatients = function(patients, i) {
     var deferred = Q.defer();
-    if (i > length) {
+    if (i > patients.length) {
         deferred.resolve('fin')
     } else {
         var patient = new Objects['Patient'](patients[i])
@@ -95,8 +94,8 @@ var length = 5
                                     console.log(record.get('count(*)'));
                                 });
                                 session.close();
-                                nd.resolve(processPatients(patients,i+1));
-                                if (i == length) {
+                                nd.resolve(processPatients(patients, i + 1));
+                                if (i == patients.length) {
                                     neo.close();
                                 }
                             })
@@ -105,7 +104,7 @@ var length = 5
                             });
                     });
                     nd.promise.then(function(foo) {
-                                console.log(foo);
+                        console.log(foo);
                     })
                 } else {
                     console.log(JSON.stringify(data));
@@ -118,7 +117,7 @@ var length = 5
 
 
         })
-        }
+    }
     return deferred.promise;
 }
 //function to generate patient objects from raw data
@@ -145,12 +144,12 @@ var patient_cypher = fs.readFileSync(config.dirs.cypher + 'patient.cypher', 'utf
 
 //load patient data
 var p = readResource('Patient');
-    p.then(function(data) {
-    var i=0;
-    processPatients(data,0).then(function(pt) {
-console.log(pt);
-                                neo.close();
-                                neo.close();
+p.then(function(data) {
+    var i = 0;
+    processPatients(data, 0).then(function(pt) {
+        console.log(pt);
+        neo.close();
+        neo.close();
     });
 
 

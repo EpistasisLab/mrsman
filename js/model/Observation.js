@@ -36,9 +36,9 @@ function formatCode(code) {
 function ObservationModel(obj) {
     BaseModel.apply(this, arguments);
     this.resourceType = 'Observation';
-    //this.value = '';
-    //this.unit = '';
-    //this.display = '';
+    this.value = '';
+    this.unit = '';
+    this.display = '';
     if (obj.raw !== undefined) {
         if (obj.raw.valueQuantity !== undefined) {
             obj.value = formatQuantity(obj.raw.valueQuantity);
@@ -58,6 +58,7 @@ function ObservationModel(obj) {
 
     }
     this.format(obj);
+//console.log(this);
 }
 util.inherits(ObservationModel, BaseModel);
 module.exports = ObservationModel;
