@@ -9,9 +9,9 @@ function PatientModel(obj) {
     this.firstname = '';
     this.lastname = '';
     this.birthDate = '',
-        this.deceasedBoolean = '',
-        this.gender = '',
-        this.city = '';
+    this.deceasedBoolean = '',
+    this.gender = '',
+    this.city = '';
     this.format(obj);
 }
 
