@@ -9,7 +9,7 @@ const vorpal = require('vorpal')();
 const util = require('util')
 const path = require('path')
 const Objects = require('./model');
-const debug = false;
+const debug = false; 
 // configs
 var config = require('./config');
 
@@ -68,8 +68,9 @@ var getPatients = function() {
 //function to generate patient object from raw data
 var processPatients = function(patients, i) {
     var deferred = Q.defer();
-    if (i > patients.length) {
+    if (i >= patients.length) {
         deferred.resolve('fin')
+        neo.close();
     } else {
         var patient = new Objects['Patient'](patients[i])
         patient.get_extended().then(function(data) {

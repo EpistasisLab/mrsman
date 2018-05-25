@@ -4,48 +4,89 @@ from neo4jrestclient.client import GraphDatabase
 db = GraphDatabase("http://localhost:7474", username="neo4j", password="password")
 import pandas as pd
  
-#get patients with varying WHO HIV stage and their observations
-q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE', value:'WHO STAGE 3 ADULT'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[]-(e2:Encounter)-[]-(ob:Observation  {display:'CURRENT WHO HIV STAGE'}) where not ob.value =  o.value  with p match (p)--(e3:Encounter)--(o3:Observation) Return distinct p.id as patient_id,e3.id as encounter_id,o3.display as observation,o3.value as value,o3.timestamp as timestamp order by p.id,o3.timestamp"
+print("query observations")
+#get all observations from patients with varying stage and their observations
+#q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE', value:'WHO STAGE 3 ADULT'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[]-(e2:Encounter)-[]-(ob:Observation  {display:'CURRENT WHO HIV STAGE'}) where not ob.value =  o.value  with p match (p)--(e3:Encounter)--(o3:Observation) Return distinct p.id as patient_id,e3.id as encounter_id,o3.display as observation,o3.value as value,o3.timestamp as timestamp order by p.id,o3.timestamp"
+#get all observations from patients with any stage and their observations
+q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[encounter]-(e2:Encounter)-[]-(o2:Observation) Return p.id as patient_id,e.id as encounter_id,o.display as observation,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
+
+
 results = db.query(q, data_contents=True)
 columns = results.columns;
-df = pd.DataFrame(columns=columns)
-stages = pd.DataFrame(columns = ['patient_id','timestamp','stage'])
-last_patient_id = str(0);
-last_timestamp = int(0);
+obs = pd.DataFrame(columns=columns)
+stages = {}
+print("processing observations")
 for r in results:
     record = {}
     for i,val in enumerate(r):
         record[columns[i]] = val
+    patient_id = record['patient_id']
+    timestamp = record['timestamp']
+    obs = obs.append(pd.DataFrame.from_records(record,index=[0]), ignore_index=True)
     if (record['observation'] == 'CURRENT WHO HIV STAGE'):
-        stages = stages.append(pd.DataFrame.from_records({'patient_id':record['patient_id'],'timestamp':record['timestamp'],'stage':record['value']},index=[0]))
-    else:
-        df = df.append(pd.DataFrame.from_records(record,index=[0]), ignore_index=True)
-        if (record['patient_id'] != last_patient_id) | (record['timestamp'] != last_timestamp):
-            osr = stages.query('patient_id == "'+ last_patient_id  +'" & timestamp == '+ str(last_timestamp))
-            if(osr.shape[0] == 0):
-                stages = stages.append(pd.DataFrame.from_records({'patient_id':last_patient_id,'timestamp':last_timestamp,'stage':'NO STAGE'},index=[0]))
-    last_patient_id = record['patient_id']
-    last_timestamp = record['timestamp']
+        try:
+            stage = int(record['value'][10])
+        except:
+            stage = 0
+        if patient_id not in stages.keys():
+           stages[patient_id] = {}
+        if timestamp not in stages[patient_id].keys():
+           stages[patient_id][timestamp] = stage
+        #handle duplicates: use whatever stage isn't zero, otherwise comma sep
+        elif stage != stages[patient_id][timestamp]:
+           if stage == 0 & stages[patient_id][timestamp] != 0:
+             newstage = stages[patient_id][timestamp]
+           elif stage != 0 & stages[patient_id][timestamp] == 0:
+             newstage = stage
+           else:
+             newstage = int(str(stage) + str(stages[patient_id][timestamp]))
+           stages[patient_id][timestamp] = newstage
+    #else:
+    #    df = df.append(pd.DataFrame.from_records(record,index=[0]), ignore_index=True)
 
-keys = {}
-lookup = pd.DataFrame(columns=['var','val','index'])
+print("create lookup table")
+lu = {}
 for var in columns:
     i = 0
-    vals = df[var].unique()
+    vals = obs[var].unique()
+    lu[var] = {}
     for val in vals:
-        if(var == 'observation'):
-          print(val);
         try:
           f=float(val)
         except ValueError:
           i += 1
-          look = {'var':var,'val':val,'index':i}
-          lookup = lookup.append(pd.DataFrame.from_records({'var':var,'val':val,'index':i},index=[0]))
+          lu[var][val] = i
     
 
+def getstage(rec):
+   patient_id = rec.patient_id
+   timestamp = rec.timestamp
+   if patient_id not in stages.keys():
+     stage = 0
+   elif timestamp not in stages[patient_id]:
+     stage = 0
+   else:
+     stage = stages[patient_id][timestamp] 
+   return stage
+
+
+print("analyze staging")
+observations = obs.copy();
+observations['stage'] = 0;
+for i, row in observations.iterrows():
+  stage = getstage(row)
+  observations.at[i,'stage'] = stage
+  for column in columns:
+    try: 
+      val = lu[column][row[column]]
+    except:
+      val = row[column]
+    observations.at[i,column] = val
 
 
 
-df.to_pickle('observations.pkl')
-stages.to_pickle('stages.pkl')
-lookup.to_pickle('lookup.pkl')
+
+print("saving observations")
+observations.to_csv('data/csv/observations.csv',index_label=False)
+observations.to_pickle('data/pickle/observations.pkl')
+print("fin")

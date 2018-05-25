@@ -1,6 +1,30 @@
 var BaseModel = require('./Base'),
     util = require('util');
 
+
+function formatRaw(obj) {
+        if (obj.raw.valueQuantity !== undefined) {
+            obj.value = formatQuantity(obj.raw.valueQuantity);
+            var unit = formatUnit(obj.raw.valueQuantity);
+            if (unit.length > 0) {
+                obj.unit = unit;
+            }
+        } else if (obj.raw.valueString !== undefined) {
+            obj.value = obj.raw.valueString[0]['$'].value
+        } else if (obj.raw.valueCodeableConcept !== undefined) {
+            obj.value = formatCode(obj.raw.valueCodeableConcept);
+        }
+        if (obj.raw.code !== undefined) {
+            obj.display = formatCode(obj.raw.code);
+        }
+        if (obj.raw.effectiveDateTime !== undefined) {
+            obj.date = obj.raw.effectiveDateTime[0]['$']['value'];
+        }
+        delete obj.raw;
+        return obj
+
+}
+
 //convert raw xml tagged json to json
 function formatQuantity(raw) {
     var value = '';
@@ -38,27 +62,12 @@ function ObservationModel(obj) {
     this.resourceType = 'Observation';
     this.value = '';
     this.unit = '';
+    this.date = '';
     this.display = '';
     if (obj.raw !== undefined) {
-        if (obj.raw.valueQuantity !== undefined) {
-            obj.value = formatQuantity(obj.raw.valueQuantity);
-            var unit = formatUnit(obj.raw.valueQuantity);
-            if (unit.length > 0) {
-                obj.unit = unit;
-            }
-        } else if (obj.raw.valueString !== undefined) {
-            obj.value = obj.raw.valueString[0]['$'].value
-        } else if (obj.raw.valueCodeableConcept !== undefined) {
-            obj.value = formatCode(obj.raw.valueCodeableConcept);
-        }
-        if (obj.raw.code !== undefined) {
-            obj.display = formatCode(obj.raw.code);
-        }
-        delete obj.raw;
-
+        obj = formatRaw(obj);
     }
     this.format(obj);
-//console.log(this);
 }
 util.inherits(ObservationModel, BaseModel);
 module.exports = ObservationModel;

@@ -7,6 +7,7 @@ Model['Practitioner'] = require('./Practitioner');
 Model['Observation'] = require('./Observation');
 var ObservationModel = require('./Observation');
 
+
 function EncounterModel(obj) {
     Model['Base'].apply(this, arguments);
     this.resourceType = 'Encounter';
@@ -20,22 +21,26 @@ function EncounterModel(obj) {
 
 EncounterModel.prototype.format = function(obj) {
     var obj = JSON.parse(JSON.stringify(obj));
-    for (key in obj) {
+    if (obj.raw !== undefined) {
+        obj.start = obj.raw.period[0].start[0]['$'].value;
+        obj.end = obj.raw.period[0].end[0]['$'].value;
+    }
+    for (var key in obj) {
         if (this[key] !== undefined) {
             if (typeof(this[key]) !== 'function') {
                 this[key] = obj[key];
             } else {
-                 var objects = [];
-                 obj[key].map(function(data) {
-                     objects.push(new Model[key](data));
-                 });
-                 this[key] = objects;
+                var objects = [];
+                obj[key].map(function(data) {
+                   objects.push(new Model[key](data));
+                });
+                this[key] = objects;
             }
 
-            
+
         }
     }
-    if (obj.id) { 
+    if (obj.id) {
         this.id = obj.id;
     }
     if (this.resourceType !== undefined && obj[this.resourceType] !== undefined) {
