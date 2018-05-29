@@ -8,8 +8,7 @@ print("query observations")
 #get all observations from patients with varying stage and their observations
 #q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE', value:'WHO STAGE 3 ADULT'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[]-(e2:Encounter)-[]-(ob:Observation  {display:'CURRENT WHO HIV STAGE'}) where not ob.value =  o.value  with p match (p)--(e3:Encounter)--(o3:Observation) Return distinct p.id as patient_id,e3.id as encounter_id,o3.display as observation,o3.value as value,o3.timestamp as timestamp order by p.id,o3.timestamp"
 #get all observations from patients with any stage and their observations
-q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[encounter]-(e2:Encounter)-[]-(o2:Observation) Return p.id as patient_id,e.id as encounter_id,o.display as observation,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
-
+q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[encounter]-(e2:Encounter)-[]-(o2:Observation) Return p.id as patient_id,e2.id as encounter_id,o2.display as observation,o2.value as value,o2.timestamp as timestamp order by p.id,o2.timestamp limit 10000"
 
 results = db.query(q, data_contents=True)
 columns = results.columns;
