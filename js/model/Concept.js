@@ -1,9 +1,14 @@
 var BaseModel = require('./Base'),
     util = require('util');
-function ConceptModel() {
+function ConceptModel(obj) {
     BaseModel.apply(this, arguments);
+    this.resourceType = 'Concept';
+    this.format(obj);
+
 }
 util.inherits(ConceptModel, BaseModel);
+
+
 
 ConceptModel.prototype.formatter = function (record) { 
     var concept_id = "1";

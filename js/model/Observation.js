@@ -12,10 +12,13 @@ function formatRaw(obj) {
         } else if (obj.raw.valueString !== undefined) {
             obj.value = obj.raw.valueString[0]['$'].value
         } else if (obj.raw.valueCodeableConcept !== undefined) {
-            obj.value = formatCode(obj.raw.valueCodeableConcept);
+            var code = formatCode(obj.raw.valueCodeableConcept);
+            obj.value = code.display;
         }
         if (obj.raw.code !== undefined) {
-            obj.display = formatCode(obj.raw.code);
+            var code = formatCode(obj.raw.code);
+            obj.display = code.display;
+            obj.concept = code.uuid;
         }
         if (obj.raw.effectiveDateTime !== undefined) {
             obj.date = obj.raw.effectiveDateTime[0]['$']['value'];
@@ -45,22 +48,27 @@ function formatUnit(raw) {
 
 function formatCode(code) {
     var display = '';
+    var uuid = '';
     for (var i in code) {
         if (code[i].coding !== undefined) {
             for (var j in code[i].coding) {
                 if (code[i].coding[j].display !== undefined) {
                     display = code[i].coding[j].display[0]['$'].value
                 }
+                if (code[i].coding[j].code !== undefined) {
+                    uuid = code[i].coding[j].code[0]['$'].value
+                }
             }
         }
     }
-    return display;
+    return {display,uuid};
 }
 
 function ObservationModel(obj) {
     BaseModel.apply(this, arguments);
     this.resourceType = 'Observation';
     this.value = '';
+    this.concept = '';
     this.unit = '';
     this.date = '';
     this.display = '';

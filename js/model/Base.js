@@ -111,6 +111,26 @@ BaseModel.prototype.get = function() {
     return deferred.promise;
 }
 
+//load FHIR data into local array
+BaseModel.prototype.get_rest = function() {
+    var deferred = Q.defer();
+    console.log('getting ' + this.resourceType);
+    var uri = config.url + '/rest/v1/' + this.resourceType.toLowerCase() + '/' + this.id;
+    var method = 'GET';
+    var options = {
+        method: method,
+        uri: uri,
+        resolveWithFullResponse: true,
+        headers: {
+            "Authorization": config.auth
+        },
+    };
+    var promise = rp(options)
+    promise.then(function(data) {
+        deferred.resolve(JSON.parse(data.body));
+    });
+    return deferred.promise;
+}
 
 BaseModel.prototype.format = function(obj) {
     var obj = JSON.parse(JSON.stringify(obj));
