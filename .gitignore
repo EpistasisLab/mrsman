@@ -1,0 +1,6 @@
+data/*
+!data/cypher/*
+!data/cypher
+js/node_modules
+js/config.js
+/target/

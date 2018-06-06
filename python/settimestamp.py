@@ -1,7 +1,7 @@
 from neo4jrestclient import client
 from datetime import datetime
 from neo4jrestclient.client import GraphDatabase
-db = GraphDatabase("http://localhost:7474", username="neo4j", password="password")
+db = GraphDatabase("http://127.0.0.2:7474", username="neo4j", password="password")
  
 #get patients with varying WHO HIV stage and their observations
 q = "MATCH (o:Observation) return distinct o.date"

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
- // load data from OpenMRS into neo4j
+// load data from OpenMRS into neo4j based on a userlist
 // basic requires
 const http = require('http');
 const Q = require("q"); // v2.11.1
@@ -144,6 +144,8 @@ var patient_cypher = fs.readFileSync(config.dirs.cypher + 'patient.cypher', 'utf
 
 
 //load patient data
+//resource may be a file
+//var p = readResource('DemoPatients');
 var p = readResource('Patient');
 p.then(function(data) {
     var i = 0;

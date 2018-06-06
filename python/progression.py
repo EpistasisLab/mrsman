@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from neo4jrestclient import client
 from neo4jrestclient.client import GraphDatabase
-db = GraphDatabase("http://127.0.0.2:7474", username="neo4j", password="password")
+db = GraphDatabase("http://localhost:7474", username="neo4j", password="password")
 import pandas as pd
 import numpy as np
 import json
@@ -15,16 +15,29 @@ from matplotlib import pyplot
 
  
 print("query observations")
-#q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[encounter]-(e2:Encounter)-[]-(o2:Observation) Return p.id as patient_id,e2.id as encounter_id,o2.display as observation,o2.value as value,o2.timestamp as timestamp order by p.id,o2.timestamp"
-#q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[]-(e2:Encounter)-[]-(ob:Observation  {display:'CURRENT WHO HIV STAGE'}) where not ob.value =  o.value  with p match (p)--(e3:Encounter)--(o3:Observation) Return distinct p.id as patient_id,e3.id as encounter_id,o3.display as observation,o3.value as value,o3.timestamp as timestamp order by p.id,o3.timestamp"
-#q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})--(e:Encounter) with e match (p:Patient)--(e)--(o:Observation)  Return p.id as patient_id,e.id as encounter_id,o.display as observation,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
-#q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})--(e:Encounter) with e match (p:Patient)--(e)--(o:Observation)--(c:Concept) where c.class = 'Test' or c.class = 'Finding' Return p.id as patient_id,e.id as encounter_id,o.display as observation,c.class as class,c.type as type,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
-q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})--(e:Encounter) with e match (p:Patient)--(e)--(o:Observation)--(c:Concept) where c.class = 'Test' or o.display = 'CURRENT WHO HIV STAGE' Return p.id as patient_id,e.id as encounter_id,o.display as observation,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
+#q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})--(e:Encounter) with e match (p:Patient)--(e)--(o:Observation)--(c:Concept) where c.class = 'Test' or o.display = 'CURRENT WHO HIV STAGE' Return p.id as patient_id,e.id as encounter_id,o.display as observation,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
+#q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})--(e:Encounter) with e match (p:Patient)--(e)--(o:Observation)--(c:Concept)  Return p.id as patient_id,e.id as encounter_id,o.display as observation,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
+q="MATCH (o:Observation {display:'CURRENT WHO HIV STAGE'})--(e:Encounter) with e match (p:Patient)--(e)--(o:Observation) Return p.id as patient_id,e.id as encounter_id,o.display as observation,o.value as value,o.timestamp as timestamp order by p.id,o.timestamp"
 
 results = db.query(q, data_contents=True)
 columns = results.columns;
 stages = {}
-print("processing observations")
+observations = pd.DataFrame.from_records(results.rows,columns=columns)
+
+print("create lookup table")
+lookup = {}
+for var in columns:
+    i = 0
+    vals = observations[var].unique()
+    lookup[var] = {}
+    for val in vals:
+        try:
+          f=float(val)
+        except ValueError:
+          i += 1
+          lookup[var][val] = i
+
+print("processing stages")
 for r in results:
     record = {}
     for i,val in enumerate(r):
@@ -50,21 +63,6 @@ for r in results:
              newstage = stage
            stages[patient_id][timestamp] = newstage
 
-obs = pd.DataFrame.from_records(results.rows,columns=columns)
-
-print("create lookup table")
-lookup = {}
-for var in columns:
-    i = 0
-    vals = obs[var].unique()
-    lookup[var] = {}
-    for val in vals:
-        try:
-          f=float(val)
-        except ValueError:
-          i += 1
-          lookup[var][val] = i
-    
 
 def getstage(rec):
    patient_id = rec.patient_id
@@ -74,12 +72,11 @@ def getstage(rec):
    elif timestamp not in stages[patient_id]:
      stage = 0
    else:
-     stage = stages[patient_id][timestamp] 
+     stage = stages[patient_id][timestamp]
    return stage
 
 
-print("format staging")
-observations = obs.copy();
+print("transform observations")
 observations['stage'] = 0;
 for i, row in observations.iterrows():
   stage = getstage(row)
@@ -97,51 +94,47 @@ observations.to_pickle('data/pickle/observations.pkl')
 with open('data/json/lookup.json', 'w') as outfile:
     json.dump(lookup, outfile)
 
-
-
 print("analyzing")
 max_encounter = observations.encounter_id.max()
 max_observation = observations.observation.max()
 #patient id column
-pid_col = max_observation + 1
+pid_col = 0
 #timestamp column
-ts_col = max_observation + 2
+ts_col = max_observation + 1
 #staging column
-stage_col = max_observation + 3
-last_col = stage_col
-last_col = 4 
+stage_col_1 = lookup["observation"]["CURRENT WHO HIV STAGE"]
+stage_col_2 = max_observation + 2
+last_col = stage_col_2
+#last_col = 3
 #
-encounters = np.zeros((max_encounter+1,max_observation+4))
+encounters = np.zeros((max_encounter+1,max_observation+3))
 for i,row in observations.iterrows():
   encounters[row.encounter_id,row.observation] = row.value
   encounters[row.encounter_id,pid_col] = row.patient_id
   encounters[row.encounter_id,ts_col] = row.timestamp
-  encounters[row.encounter_id,stage_col] = row.stage
+  encounters[row.encounter_id,stage_col_2] = row.stage
 
-
-encounters = encounters[1:max_encounter,1:max_observation+4]
+#delete 1st row
+encounters  = np.delete(encounters,0,0)
+#encounters = encounters[1:max_encounter+1,1:max_observation+3]
+endpoints = encounters[...,stage_col_2]
+#remove primary staging column
+encounters  = np.delete(encounters,stage_col_1,1)
+#remove calculated staging column
 np.savetxt("data/csv/encounters.csv", encounters, delimiter=",")
-#remove first row
-#remove stage col
-endpoints = encounters[...,stage_col]
-obs2 = encounters[...,:last_col]
+encounters  = np.delete(encounters,-1,1)
+np.savetxt("data/csv/endpoints.csv", endpoints, delimiter=",")
 
-x_train, x_test, y_train, y_test = train_test_split(obs2,endpoints,  test_size=0.4, random_state=0)
-
-
-
+#obs2 = encounters[...,:last_col-1]
+x_train, x_test, y_train, y_test = train_test_split(encounters,endpoints,  test_size=0.2, random_state=0)
 model = Sequential()
-model.add(Dense(units=64, activation='relu', input_dim=last_col))
-model.add(Dense(units=5, activation='softmax'))
+model.add(Dense(units=17, activation='sigmoid', input_dim=encounters.shape[1]))
+model.add(Dense(units=np.unique(endpoints).size, activation='sigmoid'))
 model.compile(loss='sparse_categorical_crossentropy',
               optimizer='sgd',
               metrics=['accuracy'])
-
-
-
 y_train_binary = to_categorical(y_train)
 y_test_binary = to_categorical(y_test)
-
 history=model.fit(x_train, y_train, epochs=60, batch_size=100, validation_data=(x_test, y_test), verbose=2, shuffle=False)
 #model.fit(x_train, y_train, epochs=144, batch_size=32)
 loss_and_metrics = model.evaluate(x_test, y_test, batch_size=128)
