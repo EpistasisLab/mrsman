@@ -1,0 +1,2 @@
+#return HIV patients in stage 4 who have data with other stages
+MATCH (o:Observation {display:"CURRENT WHO HIV STAGE", value:"WHO STAGE 4 ADULT"})-[spawned]-(e:Encounter)-[encountered]-(p:Patient)-[]-(e2:Encounter)-[]-(ob:Observation  {display:"CURRENT WHO HIV STAGE"}) where ob.value = 'WHO STAGE 3 ADULT' or ob.value = 'WHO STAGE 2 ADULT' or ob.value = 'WHO STAGE 1 ADULT' RETURN p,e,e2,o,ob;

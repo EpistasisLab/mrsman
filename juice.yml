@@ -1,0 +1,9 @@
+apps:
+  - script : python/grok.py 
+    watch  : true
+    restart_delay : 4000
+    interpreter_args: "-u"
+  - script : python/progression.py 
+    watch  : true
+    restart_delay : 400000
+    interpreter_args: "-u"
