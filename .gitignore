@@ -3,4 +3,13 @@ data/*
 !data/cypher
 js/node_modules
 js/config.js
+js/tmp
+tmp/
 /target/
+package-lock.json
+node_modules
+dumps/
+.settings
+.project
+.classpath
+.ipynb_checkpoints/
