@@ -89,6 +89,28 @@ BaseModel.prototype.get_extended = function() {
 };
 
 
+//post object to FHIR interface
+BaseModel.prototype.post = function() {
+    var deferred = Q.defer();
+    console.log('posting ' + this.resourceType);
+    var uri = config.url + '/fhir/' + this.resourceType;
+    var method = 'POST';
+    var options = {
+        method: method,
+        uri: uri,
+        resolveWithFullResponse: true,
+        headers: {
+            "Authorization": config.auth
+        },
+        json: this
+    };
+console.log(options);
+    var promise = rp(options)
+    promise.then(function(data) {
+        deferred.resolve(data.body);
+    });
+    return deferred.promise;
+}
 
 //load FHIR data into local array
 BaseModel.prototype.get = function() {

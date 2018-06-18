@@ -12,7 +12,9 @@ function PatientModel(obj) {
     this.deceasedBoolean = '',
     this.gender = '',
     this.city = '';
-    this.format(obj);
+    if(obj !== undefined) {
+      this.format(obj);
+    }
 }
 
 
@@ -84,6 +86,7 @@ PatientModel.prototype.format = function(obj) {
         }
     }
 }
+
 
 
 util.inherits(PatientModel, BaseModel);
