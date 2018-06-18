@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // import patients from example dataset provided by:
 // "A 100,000-patient database that contains in total 100,000 patients, 361,760 admissions, and 107,535,387 lab observations."
 // http://arxiv.org/pdf/1608.00570.pdf 
