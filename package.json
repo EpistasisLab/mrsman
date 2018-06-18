@@ -1,0 +1,32 @@
+{
+  "version": "0.0.0",
+  "private": true,
+  "name": "restclient",
+  "description": "OpenMRS interface scripts",
+  "license": "MIT",
+  "dependencies": {
+    "awcm": "^1.1.0",
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.8.5",
+    "cypher-stream": "^1.1.0",
+    "fast-csv": "^2.4.1",
+    "json-to-cypher": "^1.0.0",
+    "luhn-mod-n": "^1.0.1",
+    "mysql": "^2.15.0",
+    "neo4j-driver": "^1.6.1",
+    "node-csv-parse": "^1.2.0",
+    "node-neo4j": "^2.0.3",
+    "node-random-name": "^1.0.1",
+    "node-uuid": "^1.4.8",
+    "pg": "^7.4.3",
+    "pg-pool": "^2.0.3",
+    "q": "^1.0.0",
+    "random-name": "^0.1.2",
+    "request": "^2.85.0",
+    "request-promise": "^4.2.2",
+    "stream-transform": "^1.0.2",
+    "telnet2": "0.0.1",
+    "vorpal": "^1.12.0",
+    "xml-js": "^1.6.2"
+  }
+}

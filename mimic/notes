@@ -1,0 +1,10 @@
+src	dst
+patients	patient
+caregivers	practitioner
+d_item	concept
+admission	encounter
+chartevents	observation
+
+
+#diagnosis codes for expired patients
+select admissions.diagnosis,d_icd_diagnoses.short_title,patients.subject_id,admissions.hadm_id,diagnoses_icd.seq_num,diagnoses_icd.icd9_code from patients left join admissions on admissions.subject_id = patients.subject_id left join diagnoses_icd on diagnoses_icd.hadm_id = admissions.hadm_id left join d_icd_diagnoses on d_icd_diagnoses.icd9_code = diagnoses_icd.icd9_code where patients.expire_flag=1;
