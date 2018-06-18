@@ -145,6 +145,8 @@ endpoints = encounters[...,stage_col_2]
 encounters[:, stage_col_1] = [0]
 #remove calculated staging column
 encs  = encounters.copy()
+np.savetxt("data/csv/encounters.csv", encounters, delimiter=",")
+#remove endpoints
 encounters  = np.delete(encounters,-1,1)
 #remove patient ids
 #encounters[:, pid_col] = [0]
@@ -163,7 +165,6 @@ for imp in etc_model.feature_importances_:
 important = imps[:,1].argsort()[[1,2,3,4,5]]
 print(important)
 encs = encs[:,[index for index in range(encounters.shape[1]) if index not in important]]
-np.savetxt("data/csv/encounters.csv", encs, delimiter=",")
 
 x_train, x_test, y_train, y_test = train_test_split(encounters,endpoints,  test_size=0.2, random_state=0)
 
