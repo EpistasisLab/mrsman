@@ -763,6 +763,7 @@ var formatRecords = function(resource, records, data) {
         data['patient_visit'] = patient_visit;
         data['id'] = uuidv4();
         records[patient_visit] = data;
+console.log(data);
     }
     if (resource == 'Concept') {
 
