@@ -28,6 +28,7 @@ except:
     exit()
 
 
+
 #create record in openmrs database
 def insertDict(table,Dict):
     placeholder = ", ".join(["%s"] * len(Dict))
@@ -72,7 +73,6 @@ def getSrc(table,limit):
     stmt = "select * from "+table+" where row_id not in (select row_id from uuids where src = '"+table+"')";
     if(limit):
         stmt+= " limit "+limit
-    print(stmt)
     try:
         pg_cur.execute(stmt)
         return pg_cur
@@ -84,9 +84,7 @@ def getSrc(table,limit):
 
 def getAdmissions(limit):
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt = "select a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime from admissions a left join (select uuid patient_uuid,patients.* from patients left join uuids on patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes'"
-    stmt = " where row_id not in (select row_id from uuids where src = 'admissions')";
-        stmt+=" where patient_uuid = '" +patient_uuid+ "'"
+    stmt = "select a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime from admissions a left join (select uuid patient_uuid,patients.* from patients left join uuids on patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'admissions')"
     if(limit):
         stmt+=" limit "+ limit
     try:
@@ -98,24 +96,38 @@ def getAdmissions(limit):
         exit()
 
 
+def postDict(endpoint,table,Dict):
+    if(endpoint == 'fhir'):
+        uri = "http://localhost:8080/openmrs/ws/fhir/" + table.capitalize()
+    else:
+        uri = "http://localhost:8080/openmrs/ws/rest/v1/" + table
+    r = requests.post(uri, json=Dict,auth=HTTPBasicAuth('admin', 'Admin123'))
+    return(r.headers['Location'].split('/').pop())
+
+
+
 # insert visit type records into encountertypes table in openmrs db
-def visittypestoEncounterTypes():
-    src='encountertypes'
+def visittypestoVisitTypes():
+    src='visittypes'
     et_cur = getSrc(src,None)
     for record in et_cur:
       date = time.strftime('%Y-%m-%d %H:%M:%S')
       et_uuid = str(uuid.uuid4());
-      et_id=insertDict('encounter_type',{
+      et_id=insertDict('visit_type',{
         "creator": "1",
         "uuid": et_uuid,
-        "description": record.encountertype,
-        "name": record.encountertype,
+        "description": record.visittype,
+        "name": record.visittype,
         "date_created": date,
       })
       uuid_cur = insertPgDict('uuids',{'src':src,'row_id':record.row_id,'uuid':et_uuid})
       uuid_cur.close()
     et_cur.close()
     pg_conn.commit()
+
+
+
+
 
 # post practitioners to openmrs fhir interface
 def caregiversToPractitioners(limit):
@@ -177,9 +189,10 @@ def patientsToPatients(limit):
       "deceasedBoolean": deceasedBoolean,
       "active": True
       }
-      #if(record.dod):
-      #  deathDate=str(record.dod.strftime('%Y-%m-%d'))
-      #  patient["deceasedDateTime"]=deathDate,
+      if(record.dod):
+        deathDate=str(record.dod.strftime('%Y-%m-%d'))
+        patient["deceasedDateTime"]=deathDate
+      print(patient)
       uuid=postDict('fhir','patient',patient)
       uuid_cur = insertPgDict('uuids',{'src':src,'row_id':record.row_id,'uuid':uuid})
       uuid_cur.close()
@@ -292,7 +305,7 @@ def ditemsToConcepts():
 
 # insert unique diagnoses into openmrs concept table
 def diagnosesToConcepts():
-    src='diagnosis'
+    src='diagnoses'
     concept_cur = getSrc(src,None)
     for record in concept_cur:
         if record.diagnosis == '' or record.diagnosis is None:
@@ -401,21 +414,20 @@ def initDb():
     icd9ToConcepts()
     diagnosesToConcepts()
     ditemsToConcepts()
-    visittypestoEncounterTypes()
+    visittypestoVisitTypes()
 
 def initRest():
     locationsToLocations()
 
 def initPop():
-    caregiversToPractitioners('100')
+#    caregiversToPractitioners('100')
     patientsToPatients('100')
 
 def initAdmit():
-    admissionsToEncounters('100')
+    admissionsToEncounters(None)
 
 a = eval(sys.argv[1])
 a()
-#initDb()
 pg_conn.commit()
 mysql_conn.commit()
 mysql_conn.close()

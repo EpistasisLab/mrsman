@@ -42,12 +42,3 @@ CREATE TABLE mimiciii.visittypes
 );
 insert into visittypes (visittype) (select admission_type from admissions group by admission_type);
 CREATE UNIQUE INDEX visittype_idx ON visittypes (visittype);
-
-DROP TABLE if exists encountertypes;
-CREATE TABLE mimiciii.encountertypes
-(
-  row_id SERIAL,
-  encountertype character varying(50)
-);
-insert into encountertypes (encountertype) (select admission_type from admissions group by admission_type);
-CREATE UNIQUE INDEX encountertype_idx ON encountertypes (encountertype);
