@@ -13,20 +13,36 @@ from luhn import *
 from requests.auth import HTTPBasicAuth
 import xml.etree.ElementTree
 import sys
+#
+# UTILITY
+#
+# choose a random date from a range
+def randomDate(start, end):
+    date_format = '%Y-%m-%d'
+    prop=random.random()
+    stime = time.mktime(time.strptime(start, date_format))
+    etime = time.mktime(time.strptime(end, date_format))
+    ptime = stime + prop * (etime - stime)
+    return time.strftime(date_format, time.localtime(ptime)) + 'T00:00:00'
 
-try:
-    pg_conn=psycopg2.connect("dbname='mimic' user='postgres' password='postgres'")
-except:
-    print("unable to connect to the postgres databases")
-    exit()
+def randomDate(start, end):
 
-try:
-    mysql_conn = pymysql.connect(host='127.0.0.1', user='root', passwd='password', db='ann')
-    mysql_cur = mysql_conn.cursor()
-except:
-    print("unable to connect to the mysql database")
-    exit()
-
+#
+# DATA I/O
+#
+#load not-yet-imported mimic records
+def getSrc(table,limit):
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select * from "+table+" where row_id not in (select row_id from uuids where src = '"+table+"')";
+    if(limit):
+        stmt+= " limit "+limit
+    try:
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+       print("can't select from "+table)
+       print(e)
+       exit()
 
 
 #create record in openmrs database
@@ -43,17 +59,6 @@ def insertDict(table,Dict):
         exit()
 
 #create record in mimic database
-def loadPgsqlFile(filename):
-    pg_cur = pg_conn.cursor()
-    try:
-        pg_cur.execute(open(filename, "r").read())
-        return pg_cur
-    except Exception as e:
-        print("can't load file")
-        print(e)
-        exit()
-
-#create record in mimic database
 def insertPgDict(table,Dict):
     pg_cur = pg_conn.cursor()
     placeholder = ", ".join(["%s"] * len(Dict))
@@ -66,22 +71,30 @@ def insertPgDict(table,Dict):
         print(e)
         exit()
 
-
-#load records from table plus uuid
-def getSrc(table,limit):
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt = "select * from "+table+" where row_id not in (select row_id from uuids where src = '"+table+"')";
-    if(limit):
-        stmt+= " limit "+limit
+#run sql from file in mimic database
+def loadPgsqlFile(filename):
+    pg_cur = pg_conn.cursor()
     try:
-        pg_cur.execute(stmt)
+        pg_cur.execute(open(filename, "r").read())
         return pg_cur
     except Exception as e:
-       print("can't select from "+table)
-       print(e)
-       exit()
+        print("can't load file")
+        print(e)
+        exit()
 
 
+#post a json encoded record to the fhir/rest interface
+def postDict(endpoint,table,Dict):
+    if(endpoint == 'fhir'):
+        uri = "http://localhost:8080/openmrs/ws/fhir/" + table.capitalize()
+    else:
+        uri = "http://localhost:8080/openmrs/ws/rest/v1/" + table
+    r = requests.post(uri, json=Dict,auth=HTTPBasicAuth('admin', 'Admin123'))
+    return(r.headers['Location'].split('/').pop())
+
+
+
+#load not-yet-imported admissions records for imported patients
 def getAdmissions(limit):
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     stmt = "select a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime from admissions a left join (select uuid patient_uuid,patients.* from patients left join uuids on patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'admissions')"
@@ -96,16 +109,9 @@ def getAdmissions(limit):
         exit()
 
 
-def postDict(endpoint,table,Dict):
-    if(endpoint == 'fhir'):
-        uri = "http://localhost:8080/openmrs/ws/fhir/" + table.capitalize()
-    else:
-        uri = "http://localhost:8080/openmrs/ws/rest/v1/" + table
-    r = requests.post(uri, json=Dict,auth=HTTPBasicAuth('admin', 'Admin123'))
-    return(r.headers['Location'].split('/').pop())
-
-
-
+#
+#MODEL MANIPULATION
+#
 # insert visit type records into encountertypes table in openmrs db
 def visittypestoVisitTypes():
     src='visittypes'
@@ -124,9 +130,6 @@ def visittypestoVisitTypes():
       uuid_cur.close()
     et_cur.close()
     pg_conn.commit()
-
-
-
 
 
 # post practitioners to openmrs fhir interface
@@ -155,6 +158,7 @@ def caregiversToPractitioners(limit):
       uuid_cur.close()
     concept_cur.close()
     pg_conn.commit()
+
 
 # post patients to openmrs fhir interface
 def patientsToPatients(limit):
@@ -189,10 +193,10 @@ def patientsToPatients(limit):
       "deceasedBoolean": deceasedBoolean,
       "active": True
       }
-      if(record.dod):
-        deathDate=str(record.dod.strftime('%Y-%m-%d'))
-        patient["deceasedDateTime"]=deathDate
-      print(patient)
+#      if(record.dod):
+#        deathDate=str(record.dod.strftime('%Y-%m-%d'))
+#        patient["deceasedDateTime"]=deathDate
+#      print(patient)
       uuid=postDict('fhir','patient',patient)
       uuid_cur = insertPgDict('uuids',{'src':src,'row_id':record.row_id,'uuid':uuid})
       uuid_cur.close()
@@ -220,14 +224,6 @@ def admissionsToEncounters(limit):
             "start": start,
             "end": end
         },
-#        "participant": [
-#        {
-#            "individual": {
-#                "reference": "Practitioner/ba3d8464-5671-4fb7-b974-7a6aeea774c0",
-#                "display": "Eric Oakley(Identifier:null)"
-#            }
-#        }
-#        ],
         "location": [{
            "location": {
                 "reference": "Location/"+record.admission_location_uuid,
@@ -398,15 +394,10 @@ def icd9ToConcepts():
     concept_cur.close()
     pg_conn.commit()
 
-# choose a random date from a range
-def randomDate(start, end):
-    date_format = '%Y-%m-%d'
-    prop=random.random()
-    stime = time.mktime(time.strptime(start, date_format))
-    etime = time.mktime(time.strptime(end, date_format))
-    ptime = stime + prop * (etime - stime)
-    return time.strftime(date_format, time.localtime(ptime)) + 'T00:00:00'
 
+#
+#TASKS
+#
 #initialize openmrs database (run before initial website load on fresh install)
 def initDb():
     print("initializing database")
@@ -416,18 +407,43 @@ def initDb():
     ditemsToConcepts()
     visittypestoVisitTypes()
 
+#initialize
 def initRest():
     locationsToLocations()
 
 def initPop():
 #    caregiversToPractitioners('100')
-    patientsToPatients('100')
+    patientsToPatients('10')
 
 def initAdmit():
     admissionsToEncounters(None)
 
-a = eval(sys.argv[1])
-a()
-pg_conn.commit()
-mysql_conn.commit()
-mysql_conn.close()
+#
+#MAIN
+#
+#connect to mimic dataset postgres
+if (len(sys.argv) > 1):
+    try:
+        pg_conn=psycopg2.connect("dbname='mimic' user='postgres' password='postgres'")
+    except:
+        print("unable to connect to the postgres databases")
+        exit()
+
+#connect to openmrs mysql
+    try:
+        mysql_conn = pymysql.connect(host='127.0.0.1', user='root', passwd='password', db='ann')
+        mysql_cur = mysql_conn.cursor()
+    except:
+        print("unable to connect to the mysql database")
+        exit()
+
+    #run function from cli
+    a = eval(sys.argv[1])
+    a()
+    pg_conn.commit()
+    mysql_conn.commit()
+    mysql_conn.close()
+else:
+    tmp = globals().copy()
+    print("available arguments:")
+    [print(k) for k,v in tmp.items() if k.startswith('init')]
