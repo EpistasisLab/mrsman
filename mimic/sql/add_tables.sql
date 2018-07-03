@@ -42,3 +42,7 @@ CREATE TABLE mimiciii.visittypes
 );
 insert into visittypes (visittype) (select admission_type from admissions group by admission_type);
 CREATE UNIQUE INDEX visittype_idx ON visittypes (visittype);
+
+drop table if exists deltadate;
+create table deltadate as select floor(EXTRACT(epoch FROM(min(admissions.admittime)-'2000-01-01'))/(3600*24)) as offset,subject_id from admissions group by subject_id;
+create table chartcounts as select label,sum(num) num,json_agg(ce.itemid) itemids from (select count(*) num,itemid from chartevents group by itemid) ce left join d_items on d_items.itemid = ce.itemid group by label order by num desc; 

@@ -10,9 +10,12 @@ import requests
 import random
 import time
 from luhn import *
+from careunits import *
 from requests.auth import HTTPBasicAuth
 import xml.etree.ElementTree
 import sys
+from datetime import date
+from dateutil.relativedelta import relativedelta
 #
 # UTILITY
 #
@@ -25,7 +28,13 @@ def randomDate(start, end):
     ptime = stime + prop * (etime - stime)
     return time.strftime(date_format, time.localtime(ptime)) + 'T00:00:00'
 
-def randomDate(start, end):
+#shift dates back 200 years
+def shiftDate(src_date):
+      return str((src_date + relativedelta(years=-200)).isoformat())
+
+#shift dates by offset number of hours
+def deltaDate(src_date,offset):
+      return str((src_date + relativedelta(days=-offset)).isoformat())
 
 #
 # DATA I/O
@@ -43,6 +52,37 @@ def getSrc(table,limit):
        print("can't select from "+table)
        print(e)
        exit()
+
+
+#load not-yet-imported mimic records joined to deltadate
+def getSrcDelta(table,limit):
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select "+table+".*,deltadate.offset from "+table+" left join deltadate on deltadate.subject_id = "+table+".subject_id where row_id not in (select row_id from uuids where src = '"+table+"')";
+    if(limit):
+        stmt+= " limit "+limit
+    try:
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+       print("can't select from "+table)
+       print(e)
+       exit()
+
+#load not-yet-imported mimic records with filter + offset
+def getSrcFilterDelta(table,Dict):
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select "+table+".*,deltadate.offset from "+table+" left join deltadate on deltadate.subject_id = "+table+".subject_id where row_id not in (select row_id from uuids where src = '"+table+"')";
+    if Dict:
+        for col_name in Dict:
+            stmt+= " and "+col_name+" = '"+Dict[col_name]+"'" 
+    try:
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+       print("can't select from "+table)
+       print(e)
+       exit()
+
 
 
 #create record in openmrs database
@@ -90,14 +130,21 @@ def postDict(endpoint,table,Dict):
     else:
         uri = "http://localhost:8080/openmrs/ws/rest/v1/" + table
     r = requests.post(uri, json=Dict,auth=HTTPBasicAuth('admin', 'Admin123'))
-    return(r.headers['Location'].split('/').pop())
+    if("Location" in r.headers):
+      return(r.headers['Location'].split('/').pop())
+    else:
+      print("Unexpected response:")
+      print(r.text)
+      return(False)
+      #exit()
+
 
 
 
 #load not-yet-imported admissions records for imported patients
 def getAdmissions(limit):
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt = "select a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime from admissions a left join (select uuid patient_uuid,patients.* from patients left join uuids on patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'admissions')"
+    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime,deltadate.offset from admissions a left join (select uuid patient_uuid,patients.* from patients left join uuids on patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'admissions')"
     if(limit):
         stmt+=" limit "+ limit
     try:
@@ -107,6 +154,32 @@ def getAdmissions(limit):
         print("can't load admissions")
         print(e)
         exit()
+
+
+#load not-yet-imported admissions records for imported patients
+def getNoteEvents(hadm_id):
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt="select noteevents.*,cg_uuids.uuid cg_uuid from noteevents left join caregivers on caregivers.cgid = noteevents.cgid left join uuids cg_uuids on cg_uuids.row_id = caregivers.row_id and cg_uuids.src = 'caregivers' left join deltadate on deltadate.subject_id = noteevents.subject_id where hadm_id = '"+str(hadm_id)+"' and noteevents.cgid is not null"
+    try:
+        print(stmt)
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+        print("can't load admissions")
+        print(e)
+        exit()
+
+#load not-yet-imported admissions records for imported patients
+def getChartEvents(hadm_id):
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt="select chartevents.*,cg_uuids.uuid cg_uuid from chartevents left join caregivers on caregivers.cgid = chartevents.cgid left join uuids cg_uuids on cg_uuids.row_id = caregivers.row_id and cg_uuids.src = 'caregivers' left join deltadate on deltadate.subject_id = chartevents.subject_id where hadm_id = '"+str(hadm_id)+"' and chartevents.cgid is not null"
+    try:
+        print(stmt)
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+        print("can't load admissions")
+        print(e)
 
 
 #
@@ -163,12 +236,11 @@ def caregiversToPractitioners(limit):
 # post patients to openmrs fhir interface
 def patientsToPatients(limit):
     src='patients'
-    patient_cur = getSrc(src,limit)
+    patient_cur = getSrcDelta(src,limit)
     for record in patient_cur:
-      birthDate=str(record.dob.strftime('%Y-%m-%d'))
       gender = {"M":"male","F":"female"}[record.gender]
       deceasedBoolean = {1:True,0:False}[record.expire_flag]
-      OpenMRSID=str(record.row_id) + '-' + str(generate(str(record.row_id)))
+      OpenMRSID=str(record.subject_id) + '-' + str(generate(str(record.subject_id)))
       patient={
       "resourceType": "Patient",
       "identifier": [
@@ -189,14 +261,13 @@ def patientsToPatients(limit):
         }
       ],
       "gender": gender,
-      "birthDate": birthDate,
+      "birthDate": deltaDate(record.dob,record.offset),
       "deceasedBoolean": deceasedBoolean,
       "active": True
       }
 #      if(record.dod):
-#        deathDate=str(record.dod.strftime('%Y-%m-%d'))
-#        patient["deceasedDateTime"]=deathDate
-#      print(patient)
+#        patient["deceasedDateTime"]=shiftDate(record.dod)
+      print(patient)
       uuid=postDict('fhir','patient',patient)
       uuid_cur = insertPgDict('uuids',{'src':src,'row_id':record.row_id,'uuid':uuid})
       uuid_cur.close()
@@ -207,9 +278,9 @@ def patientsToPatients(limit):
 def admissionsToEncounters(limit):
     admissions_cur = getAdmissions(limit)
     for record in admissions_cur:
-      start=str(record.admittime.isoformat())
-      end=str(record.dischtime.isoformat())
-      enc_uuid=postDict('fhir','encounter',{
+      start=deltaDate(record.admittime,record.offset)
+      end=deltaDate(record.dischtime,record.offset)
+      visit={
         "resourceType": "Encounter",
         "status": "finished",
         "type": [{
@@ -233,11 +304,113 @@ def admissionsToEncounters(limit):
                 "end": end
             }
         }]
-      })
-      uuid_cur = insertPgDict('uuids',{'src':'admissions','row_id':record.row_id,'uuid':enc_uuid})
+      }
+
+      print(visit)
+      enc_uuid_1=postDict('fhir','encounter',visit)
+
+
+
+
+
+
+      uuid_cur = insertPgDict('uuids',{'src':'admissions','row_id':record.row_id,'uuid':enc_uuid_1})
       uuid_cur.close()
+
+      notes_cur = getNoteEvents(record.hadm_id)
+      #chart_cur = getChartEvents(record.hadm_id)
+      encounter_data = {}
+      encounter_data['caregivers'] =[]
+      encounter_data['notes'] =[]
+      for note in notes_cur:
+        #if(note.charttime):
+        #  date=note.charttime
+        #else:
+        #  date=note.chartdate
+        
+        #if date not in encounters.keys():
+        #  encounters[date]={}
+#        if 'notes' not in encounters[date].keys():
+#          encounters[date]['notes'] =[]
+        encounter_data['notes'].append(note)
+        if note.cg_uuid not in encounter_data['caregivers']:
+          encounter_data['caregivers'].append(note.cg_uuid)
+#      for chart in chart_cur:
+#        date=chart.charttime
+#        if date not in encounters.keys():
+#          encounters[date]={}
+#          encounters[date]['cg'] =[]
+#        if 'charts' not in encounters[date].keys():
+#          encounters[date]['charts'] =[]
+#        encounters[date]['charts'].append(chart)
+#        if chart.cg_uuid not in encounters[date]['cg']:
+#          encounters[date]['cg'].append(chart.cg_uuid)
+
+      #for encounter_record in encounter:
+#          start=deltaDate(date,record.offset)
+      practitioners = []
+#          encounter_record = 
+      for cg_uuid in encounter_data['caregivers']:
+          practitioners.append({
+            "individual": {
+                "reference": "Practitioner/" + cg_uuid,
+             }
+          })
+          
+      encounter={
+        "resourceType": "Encounter",
+        "status": "finished",
+         "type": [{
+            "coding": [{
+                "display": "Event"
+            }]
+        }],
+        "subject": {
+            "id": record.patient_uuid,
+        },
+        "period": {
+            "start": start,
+            "start": end,
+        },
+        "location": [{
+           "location": {
+                "reference": "Location/"+record.admission_location_uuid,
+            },
+            "period": {
+                "start": start,
+                "end": end
+            }
+        }],
+        "participant": practitioners,
+        "partOf": {
+                "reference": "Encounter/"+enc_uuid_1,
+         }
+      }
+      print(encounter)
+      enc_uuid_2=postDict('fhir','encounter',encounter)
+          #print(encounter)
+          #  print(encounters[encounter])
+       
+       
+     
+
+      #print(set(dates))
     admissions_cur.close()
     pg_conn.commit()
+
+# post locations to openmrs fhir interface
+def careUnitsToLocations():
+    src='locations'
+    locations = retCu()
+    for name in locations:
+      uuid=postDict('fhir','location',{
+        "resourceType": "Location",
+#        "id": record.uuid,
+        "name": name,
+        "description": locations[name],
+        "status": "active"
+      });
+
 
 # post locations to openmrs fhir interface
 def locationsToLocations():
@@ -255,6 +428,9 @@ def locationsToLocations():
       uuid_cur.close()
     locations_cur.close()
     pg_conn.commit()
+
+
+
 
 # insert unique diagnoses into openmrs concept table
 def ditemsToConcepts():
@@ -401,19 +577,27 @@ def icd9ToConcepts():
 #initialize openmrs database (run before initial website load on fresh install)
 def initDb():
     print("initializing database")
-    loadPgsqlFile('../mimic/sql/add_uuids.sql')
+    loadPgsqlFile('../mimic/sql/add_tables.sql')
+    print("generate concepts from icd9 codes")
     icd9ToConcepts()
+    print("generate concepts from diagnoses")
     diagnosesToConcepts()
+    print("generate concepts from ditems")
     ditemsToConcepts()
+    print("generate visit types")
     visittypestoVisitTypes()
 
 #initialize
-def initRest():
+def initLocations():
     locationsToLocations()
+#    careUnitsToLocations()
 
-def initPop():
-#    caregiversToPractitioners('100')
-    patientsToPatients('10')
+def initPractitioners():
+    caregiversToPractitioners(None)
+
+def initPatients():
+    patientsToPatients('1')
+    admissionsToEncounters(None)
 
 def initAdmit():
     admissionsToEncounters(None)
