@@ -10,13 +10,14 @@ import requests
 import random
 import time
 from luhn import *
-from careunits import *
+from metadata import *
 from requests.auth import HTTPBasicAuth
 import xml.etree.ElementTree
 import sys
 from datetime import date
 from dateutil.relativedelta import relativedelta
-#
+debug=False
+
 # UTILITY
 #
 # choose a random date from a range
@@ -36,6 +37,9 @@ def shiftDate(src_date):
 def deltaDate(src_date,offset):
       return str((src_date + relativedelta(days=-offset)).isoformat())
 
+
+
+
 #
 # DATA I/O
 #
@@ -53,7 +57,6 @@ def getSrc(table,limit):
        print(e)
        exit()
 
-
 #load not-yet-imported mimic records joined to deltadate
 def getSrcDelta(table,limit):
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
@@ -61,6 +64,8 @@ def getSrcDelta(table,limit):
     if(limit):
         stmt+= " limit "+limit
     try:
+        if debug:
+          print(stmt)
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
@@ -74,8 +79,51 @@ def getSrcFilterDelta(table,Dict):
     stmt = "select "+table+".*,deltadate.offset from "+table+" left join deltadate on deltadate.subject_id = "+table+".subject_id where row_id not in (select row_id from uuids where src = '"+table+"')";
     if Dict:
         for col_name in Dict:
-            stmt+= " and "+col_name+" = '"+Dict[col_name]+"'" 
+            stmt+= " and "+col_name+" = '"+str(Dict[col_name])+"'" 
     try:
+        if debug:
+          print(stmt)
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+       print("can't select from "+table)
+       print(e)
+       exit()
+
+#load imported mimic records with filter
+def getSrcUuid(table,Dict):
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select "+table+".*,uuids.uuid from "+table+" left join uuids on "+table+".row_id = uuids.row_id and uuids.src = '"+table+"'";
+    if Dict:
+        for col_name in Dict:
+            stmt+= " and "+table+"."+col_name+" = '"+str(Dict[col_name])+"'" 
+    try:
+        if debug:
+          print(stmt)
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+       print("can't select from "+table)
+       print(e)
+       exit()
+  
+
+def getLocations():
+   cur = getSrcUuid('locations',None)
+   locations = {};
+   for location in cur:
+       locations[location.location] = location.uuid
+   return(locations)
+
+#load mimic records with filter
+def getSrcFilter(table,Dict):
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select * from "+table;
+    for col_name in Dict:
+        stmt+= " where "+col_name+" = '"+str(Dict[col_name])+"'" 
+    try:
+        if debug:
+          print(stmt)
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
@@ -159,9 +207,10 @@ def getAdmissions(limit):
 #load not-yet-imported admissions records for imported patients
 def getNoteEvents(hadm_id):
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt="select noteevents.*,cg_uuids.uuid cg_uuid from noteevents left join caregivers on caregivers.cgid = noteevents.cgid left join uuids cg_uuids on cg_uuids.row_id = caregivers.row_id and cg_uuids.src = 'caregivers' left join deltadate on deltadate.subject_id = noteevents.subject_id where hadm_id = '"+str(hadm_id)+"' and noteevents.cgid is not null"
+    stmt="select noteevents.*,cg_uuids.uuid cg_uuid from noteevents left join caregivers on caregivers.cgid = noteevents.cgid left join uuids cg_uuids on cg_uuids.row_id = caregivers.row_id and cg_uuids.src = 'caregivers' where hadm_id = '"+str(hadm_id)+"' and noteevents.cgid is not null"
     try:
-        print(stmt)
+        if debug:
+          print(stmt)
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
@@ -172,15 +221,29 @@ def getNoteEvents(hadm_id):
 #load not-yet-imported admissions records for imported patients
 def getChartEvents(hadm_id):
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt="select chartevents.*,cg_uuids.uuid cg_uuid from chartevents left join caregivers on caregivers.cgid = chartevents.cgid left join uuids cg_uuids on cg_uuids.row_id = caregivers.row_id and cg_uuids.src = 'caregivers' left join deltadate on deltadate.subject_id = chartevents.subject_id where hadm_id = '"+str(hadm_id)+"' and chartevents.cgid is not null"
+    stmt="select chartevents.*,cg_uuids.uuid cg_uuid from chartevents left join caregivers on caregivers.cgid = chartevents.cgid left join uuids cg_uuids on cg_uuids.row_id = caregivers.row_id and cg_uuids.src = 'caregivers' where hadm_id = '"+str(hadm_id)+"' and chartevents.cgid is not null"
     try:
-        print(stmt)
+        if debug:
+          print(stmt)
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
         print("can't load admissions")
         print(e)
 
+def getAdmissionData(admission):
+#    for field in admission.keys():
+#      print(field)
+    tables = ['transfers','icustays','callout','services','labevents','chartevents','noteevents']
+    admission_data = {}
+    for table in tables:
+      admission_data[table] = []
+      cur=getSrcFilter(table,{'hadm_id':admission.hadm_id})
+      for record in cur:
+        admission_data[table].append(record);
+    #chartevents_cur=getChartEvents(admission.hadm_id)
+    #noteevents_cur=getNoteEvents(admission.hadm_id)
+    return(admission_data)
 
 #
 #MODEL MANIPULATION
@@ -277,9 +340,9 @@ def patientsToPatients(limit):
 # post admissions to openmrs fhir encounters interface
 def admissionsToEncounters(limit):
     admissions_cur = getAdmissions(limit)
+    location_array = getLocations(); 
     for record in admissions_cur:
-      start=deltaDate(record.admittime,record.offset)
-      end=deltaDate(record.dischtime,record.offset)
+      admission_data = getAdmissionData(record)
       visit={
         "resourceType": "Encounter",
         "status": "finished",
@@ -292,122 +355,82 @@ def admissionsToEncounters(limit):
             "id": record.patient_uuid,
         },
         "period": {
-            "start": start,
-            "end": end
+                "start":deltaDate(record.admittime,record.offset),
+                "end":deltaDate(record.dischtime,record.offset)
         },
+      #  "participant": practitioners,
         "location": [{
            "location": {
                 "reference": "Location/"+record.admission_location_uuid,
             },
             "period": {
-                "start": start,
-                "end": end
+                "start":deltaDate(record.admittime,record.offset),
+                "end":deltaDate(record.dischtime,record.offset)
             }
         }]
       }
-
-      print(visit)
       enc_uuid_1=postDict('fhir','encounter',visit)
-
-
-
-
-
-
       uuid_cur = insertPgDict('uuids',{'src':'admissions','row_id':record.row_id,'uuid':enc_uuid_1})
       uuid_cur.close()
-
-      notes_cur = getNoteEvents(record.hadm_id)
-      #chart_cur = getChartEvents(record.hadm_id)
-      encounter_data = {}
-      encounter_data['caregivers'] =[]
-      encounter_data['notes'] =[]
-      for note in notes_cur:
-        #if(note.charttime):
-        #  date=note.charttime
-        #else:
-        #  date=note.chartdate
-        
-        #if date not in encounters.keys():
-        #  encounters[date]={}
-#        if 'notes' not in encounters[date].keys():
-#          encounters[date]['notes'] =[]
-        encounter_data['notes'].append(note)
-        if note.cg_uuid not in encounter_data['caregivers']:
-          encounter_data['caregivers'].append(note.cg_uuid)
-#      for chart in chart_cur:
-#        date=chart.charttime
-#        if date not in encounters.keys():
-#          encounters[date]={}
-#          encounters[date]['cg'] =[]
-#        if 'charts' not in encounters[date].keys():
-#          encounters[date]['charts'] =[]
-#        encounters[date]['charts'].append(chart)
-#        if chart.cg_uuid not in encounters[date]['cg']:
-#          encounters[date]['cg'].append(chart.cg_uuid)
-
-      #for encounter_record in encounter:
-#          start=deltaDate(date,record.offset)
-      practitioners = []
-#          encounter_record = 
-      for cg_uuid in encounter_data['caregivers']:
-          practitioners.append({
-            "individual": {
-                "reference": "Practitioner/" + cg_uuid,
-             }
-          })
-          
-      encounter={
-        "resourceType": "Encounter",
-        "status": "finished",
-         "type": [{
-            "coding": [{
-                "display": "Event"
-            }]
-        }],
-        "subject": {
-            "id": record.patient_uuid,
-        },
-        "period": {
-            "start": start,
-            "start": end,
-        },
-        "location": [{
-           "location": {
-                "reference": "Location/"+record.admission_location_uuid,
+      print("admission: " + str(record.hadm_id))
+      for stay in admission_data['icustays']:
+        print("stay: " + str(stay.icustay_id))
+        locations = []
+        for transfer in admission_data['transfers']:
+          if transfer.icustay_id == stay.icustay_id:
+            location={
+                "location": {
+                    "reference": "Location/"+location_array[transfer.curr_careunit],
+                },
+                "period": {
+                    "start": deltaDate(transfer.intime,record.offset),
+                    "end": deltaDate(transfer.outtime,record.offset)
+                }
+            }
+            locations.append(location)
+        encounter={
+            "resourceType": "Encounter",
+            "status": "finished",
+            "type": [{
+              "coding": [{
+                  "display": "stay"
+              }]
+            }],
+            "subject": {
+              "id": record.patient_uuid,
             },
             "period": {
-                "start": start,
-                "end": end
-            }
-        }],
-        "participant": practitioners,
+              "start":deltaDate(stay.intime,record.offset),
+              "end":deltaDate(stay.outtime,record.offset)
+            },
+            "location":locations,
+#        "participant": practitioners,
         "partOf": {
                 "reference": "Encounter/"+enc_uuid_1,
          }
-      }
-      print(encounter)
-      enc_uuid_2=postDict('fhir','encounter',encounter)
-          #print(encounter)
-          #  print(encounters[encounter])
-       
-       
-     
-
-      #print(set(dates))
+        }
+        enc_uuid_2=postDict('fhir','encounter',encounter)
+        #uuid_cur = insertPgDict('uuids',{'src':'icustays','row_id':stay.row_id,'uuid':enc_uuid_2})
+        uuid_cur.close()
     admissions_cur.close()
     pg_conn.commit()
 
 # post locations to openmrs fhir interface
 def careUnitsToLocations():
-    src='locations'
-    locations = retCu()
-    for name in locations:
+    for name in careunits:
       uuid=postDict('fhir','location',{
         "resourceType": "Location",
-#        "id": record.uuid,
         "name": name,
-        "description": locations[name],
+        "description": careunits[name],
+        "status": "active"
+      });
+
+def servicesToLocations():
+    for name in services:
+      uuid=postDict('fhir','location',{
+        "resourceType": "Location",
+        "name": name,
+        "description": services[name],
         "status": "active"
       });
 
@@ -431,6 +454,38 @@ def locationsToLocations():
 
 
 
+# insert unique diagnoses into openmrs concept table
+def dlabitemsToConcepts():
+    src='d_labitems'
+    concept_cur = getSrc(src,None)
+    for record in concept_cur:
+        if record.label== '' or record.label is None:
+          description =  '[NO TEXT]'
+        else:
+          description =  record.label
+        date = time.strftime('%Y-%m-%d %H:%M:%S')
+        concept_uuid = str(uuid.uuid4());
+        concept_id = insertDict('concept',{
+          "datatype_id": "1",
+          "date_created": date,
+          "class_id": "1",
+          "creator": "1",
+          "uuid": concept_uuid 
+        })
+        insertDict('concept_name',{
+          "concept_id": concept_id,
+          "name": description,
+          "date_created": date,
+          "creator": "1",
+          "locale": "en",
+          "locale_preferred": "1",
+          "concept_name_type": "FULLY_SPECIFIED",
+          "uuid":  str(uuid.uuid4())
+        })
+        uuid_cur = insertPgDict('uuids',{'src':src,'row_id':record.row_id,'uuid':concept_uuid})
+        uuid_cur.close()
+    concept_cur.close()
+    pg_conn.commit()
 
 # insert unique diagnoses into openmrs concept table
 def ditemsToConcepts():
@@ -470,10 +525,14 @@ def ditemsToConcepts():
             "description": description,
             "uuid":  str(uuid.uuid4())
         })
-        uuid_cur = insertPgDict('uuids',{'src':src,'row_id':concept_id,'uuid':concept_uuid})
+        uuid_cur = insertPgDict('uuids',{'src':src,'row_id':record.row_id,'uuid':concept_uuid})
         uuid_cur.close()
     concept_cur.close()
     pg_conn.commit()
+
+
+
+
 
 # insert unique diagnoses into openmrs concept table
 def diagnosesToConcepts():
@@ -513,7 +572,7 @@ def diagnosesToConcepts():
             "description": description,
             "uuid":  str(uuid.uuid4())
         })
-        uuid_cur = insertPgDict('uuids',{'src':src,'row_id':concept_id,'uuid':concept_uuid})
+        uuid_cur = insertPgDict('uuids',{'src':src,'row_id':record.row_id,'uuid':concept_uuid})
         uuid_cur.close()
     concept_cur.close()
     pg_conn.commit()
@@ -584,13 +643,16 @@ def initDb():
     diagnosesToConcepts()
     print("generate concepts from ditems")
     ditemsToConcepts()
+    print("generate concepts from d_labitems")
+    dlabitemsToConcepts()
     print("generate visit types")
     visittypestoVisitTypes()
 
 #initialize
 def initLocations():
     locationsToLocations()
-#    careUnitsToLocations()
+    #careUnitsToLocations()
+    #servicesToLocations()
 
 def initPractitioners():
     caregiversToPractitioners(None)
