@@ -31,6 +31,10 @@ CREATE TABLE mimiciii.locations
 );
 insert into locations (location)  (select admission_location from admissions group by admission_location);
 insert into locations (location)  (select discharge_location from admissions group by discharge_location);
+insert into locations (location)  (select curr_careunit from transfers group by curr_careunit);
+insert into locations (location)  (select curr_service from services group by curr_service);
+delete from locations where location is null;
+
 CREATE UNIQUE INDEX location_idx ON locations (location);
 
 
@@ -45,4 +49,5 @@ CREATE UNIQUE INDEX visittype_idx ON visittypes (visittype);
 
 drop table if exists deltadate;
 create table deltadate as select floor(EXTRACT(epoch FROM(min(admissions.admittime)-'2000-01-01'))/(3600*24)) as offset,subject_id from admissions group by subject_id;
+drop table if exists chartcounts;
 create table chartcounts as select label,sum(num) num,json_agg(ce.itemid) itemids from (select count(*) num,itemid from chartevents group by itemid) ce left join d_items on d_items.itemid = ce.itemid group by label order by num desc; 
