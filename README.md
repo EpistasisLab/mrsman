@@ -25,7 +25,8 @@ and from OpenMRS into neo4j
 
 4. Initialize source and destination databases
 ```bash
-./import.py initDb
+./python/import.py initDb
+This step:
 ```
 - Create additional tables in mimic database to track openmrs issued uuids
 - Generate metadata for OpenMRS concepts
@@ -35,10 +36,10 @@ and from OpenMRS into neo4j
 
 6. Import records
 ```bash
-./import.py initLocations
-./import.py initPractitioners
-./import.py initPatients
-./import.py initAdmit
+./python/import.py initLocations
+./python/import.py initPractitioners
+./python/import.py initPatients
+./python/import.py initAdmit
 ```
  - Import steps must not be interupted.  Database changes are committed at completion of run.  Import limits may be imposed at each stage so that the system can iteratively import records.
 
@@ -60,3 +61,11 @@ cp neo_example.json neo.json  # edit this file for your environment
 ```bash
 ./gengraph.js
 ```
+
+
+# TODO
+1. Load data from chartevents table
+2. Create diagnoses, cause-of-death and transfer observations
+3. associate caregivers with encounters?
+4. Define notevent concepts
+5. Create cause-of-death observations
