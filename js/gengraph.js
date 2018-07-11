@@ -121,22 +121,6 @@ var processPatients = function(patients, i) {
     }
     return deferred.promise;
 }
-//function to generate patient objects from raw data
-var processPatientz = function(patients, i) {
-    var deferred = Q.defer();
-    if (i >= patients.length) {
-        deferred.resolve(patients)
-    } else {
-        var patient = new Objects['Patient'](patients[i])
-        patient.get_extended().then(function(data) {
-            patient.extended = data;
-            patient = new Objects['Patient'](patient)
-            patients[i] = patient;
-            deferred.resolve(processPatients(patients, i + 1));
-        })
-    }
-    return deferred.promise;
-}
 
 //APOC data loader for patient json files
 var patient_cypher = fs.readFileSync(config.dirs.cypher + 'patient.cypher', 'utf8');

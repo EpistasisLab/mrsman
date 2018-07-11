@@ -240,7 +240,38 @@ def getAdmissionData(admission):
 
 
 def addNote(admission,note,parent_uuid):
-    return(True)
+    concept_uuid = 'ee66d791-2804-4ed2-9cb1-d1664a42b04c';
+    observation = {
+       "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                # "display": "Text of encounter note"
+                "system": "http://openmrs.org",
+                "code": concept_uuid
+            }]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "effectiveDateTime": deltaDate(note.chartdate, admission.offset),
+        "issued": deltaDate(note.chartdate, admission.offset),
+        "valueString": note.text,
+            "context": {
+            "reference": "Encounter/" + parent_uuid,
+        }
+    }
+    if(note.cgid):
+        cg_uuid = caregiver_array[note.cgid];
+        performer = [
+             {
+              "reference": "Practitioner/"+cg_uuid,
+             }
+        ]
+        observation['performer'] = performer;
+    observation_uuid = postDict('fhir', 'observation', observation)
+    return(observation_uuid)
+
+
 
 
 
@@ -270,8 +301,6 @@ def addLab(admission,lab,encounter_uuid):
         }
     }
       observation_uuid = postDict('fhir', 'observation', observation)
-      print(observation)
-      print(observation_uuid)
       return(observation_uuid)
     else:
       return False
@@ -457,8 +486,6 @@ def admissionsToEncounters(limit):
         parent_uuid = postDict('fhir', 'encounter', parent)
         if (parent_uuid == False):
             return(False)
-        for note in admission_data['noteevents']:
-            addNote(record,note,parent_uuid)
         for lab in admission_data['labevents']:
             addLab(record,lab,parent_uuid)
         for icustay in admission_data['icustays']:
@@ -493,32 +520,11 @@ def admissionsToEncounters(limit):
             }
             child_uuid = postDict('fhir', 'encounter', child)
             stay_array[icustay.icustay_id] = child_uuid
+        for note in admission_data['noteevents']:
+            addNote(record,note,parent_uuid)
          
     admissions_cur.close()
     pg_conn.commit()
-
-
-# post locations to openmrs fhir interface
-#def careUnitsToLocations():
-#    for name in careunits:
-#        uuid = postDict(
-#            'fhir', 'location', {
-#                "resourceType": "Location",
-#                "name": name,
-#                "description": careunits[name],
-#                "status": "active"
-#            })
-
-
-#def servicesToLocations():
-#    for name in services:
-#        uuid = postDict(
-#            'fhir', 'location', {
-#                "resourceType": "Location",
-#                "name": name,
-#                "description": services[name],
-#                "status": "active"
-#            })
 
 
 # post locations to openmrs fhir interface
@@ -556,15 +562,13 @@ def getlabItems():
     try:
         pg_cur.execute(stmt)
         for item in pg_cur:
-          units = json.dumps(item.units)
-          item_units = None
-          for unit in units:
-            if unit:
-              item_units = unit
-           
-          print(units)
+          units = None
+          #pick non-empty units
+          for u in item.units:
+            if not units and u and not u.isspace():
+              units = u
           items[item.itemid] = {
-            'units':item_units,
+            'units':item.units[0],
             'max':item.max,
             'min':item.min
           }
@@ -609,14 +613,15 @@ def dlabitemsToConcepts():
                     "concept_name_type": "SHORT",
                     "uuid": str(uuid.uuid4())
                 })
-            insertDict(
-                'concept_numeric', {
+            numeric={
                     "concept_id": concept_id,
                     "precise": "1",
                     "hi_absolute":item['max'],
                     "low_absolute":item['min'],
-#                    "units":item['units'],
-                })
+                }
+            if item['units']:
+                numeric["units"]=item['units']
+            insertDict('concept_numeric',numeric)
             uuid_cur = insertPgDict('uuids', {
                 'src': src,
                 'row_id': record.row_id,
@@ -819,8 +824,8 @@ def initPractitioners():
 
 
 def initPatients():
-    patientsToPatients('1')
-    #admissionsToEncounters(None)
+    patientsToPatients('1000')
+    initAdmit()
 
 
 def initAdmit():

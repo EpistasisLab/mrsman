@@ -13,3 +13,4 @@ dumps/
 .project
 .classpath
 .ipynb_checkpoints/
+neo.json
