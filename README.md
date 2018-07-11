@@ -5,11 +5,12 @@ Medical Record System Management
 These tools load medical records from one system to another
 
 # requirements
-mysql-server 5.7+
-node & npm
-jdk1.6+
+-postgresql 9.5
+-mysql-server 5.7+
+-node & npm
+-jdk1.6+
 # optional
-docker 
+-docker 
 
 
 # loading demo data
@@ -34,43 +35,43 @@ cp neo_example.json neo.json  # edit this file for your environment
 
 ## Running
 ```bash
-node import.js
+./import.js
 ```
 
 
 ### MIMIC source data
 1. Load mimic dataset using modified mimic-code tools:
 - https://github.com/djfunksalot/mimic-code
-_Creates additional indexes_
+(_Creates additional indexes_)
 
 
-- Install modified OpenMRS fhir plugin:
--- https://github.com/djfunksalot/openmrs-module-fhir 
-_supports adding observation with link to encounter_
+2. Install modified OpenMRS fhir plugin:
+- https://github.com/djfunksalot/openmrs-module-fhir 
+(_supports adding observation with link to encounter_)
 
-- initialize database
-_Create additional tables in mimic database to track openmrs issued uuids_
-_Generate metadata for OpenMRS concepts_
+3. initialize database
+- Create additional tables in mimic database to track openmrs issued uuids
+- Generate metadata for OpenMRS concepts
 ```bash
 ./import.py initDb
 ```
 
-- Initialize System
-_Generate Records, order is important.  initPatients and initAdmit may be limited_
-  ../import.py (initLocations, initPractitioners, initPatients, initAdmit)
-
-
-
+4. Initialize System
+```bash
+./import.py initLocations
+./import.py initPractitioners
+./import.py initPatients
+./import.py initAdmit
+```
 
 #Import data into neo4j
 _depends on apoc-3.3.0.2-all.jar neo4j plugin_
-## (optional) run graphdb with required plugin in docker
-## Running
+## start graphdb
 ```bash
-cd <project_root>;node neo.js rebuild -sv
+./neo.js rebuild -sv
 ```
 
-## Import OpenMRS data into neo4j
+## Import OpenMRS data 
 ```bash
-cd <project_root>/js;node gengraph.js
+./gengraph.js
 ```
