@@ -2,61 +2,37 @@
 Medical Record System Management 
 
 # about 
-These tools load medical records from one system to another
+These tools load medical records from a mysql or postgres database into OpenMRS
+and from OpenMRS into neo4j
 
 # requirements
--postgresql 9.5
--mysql-server 5.7+
--node & npm
--jdk1.6+
+- postgres server 9.5+ (mimic source)
+- mysql server 5.7+ (openmrs destination)
+- neo4j 3.3.5 (with apoc 3.3 plugin)
+- node 8+
+- jdk1.6+
 # optional
--docker 
+- docker 
+
+# Loading MIMIC dataset into OpenMRS
+1. Install [modified openmrs fhir module](https://github.com/djfunksalot/openmrs-module-fhir)  (_supports adding observation with link to encounter_)
+
+2. Configure OpenMRS
+-Start with an uninitialized OpenMRS system (do not log in).  OpenMRS is dependant on database resident concepts for everything from admissions to observations.  The simplest way to generate these concepts is by generating metadata on source data.   Concepts must exist in the OpenMRS database upon system initialization.  This occurs during first login as the "admin" user.
+- Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true"
 
 
-# loading demo data
-- Start with uninitialized OpenMRS system  (do not log in)
+3. Load mimic dataset into postgres using [modified mimic-code tools] (https://github.com/djfunksalot/mimic-code) (_Creates additional indexes_)
 
-## emrbots source records
-- download 100,000-patient artificial EMR database from emrbots (http://www.emrbots.org/)
-- load records into empty db by running sequential import scripts
-```bash
-cd sql/ 
-mysql <dbname> < 01_create.sql  
-mysql <dbname> < 02_load.sql
-mysql <dbname> < 03_update.sql
-```
-## configure javascript environment
-```bash
-cd js/
-npm install
-cp config_example.js config.js  # edit this file for your environment
-cp neo_example.json neo.json  # edit this file for your environment
-```
-
-## Running
-```bash
-./import.js
-```
-
-
-### MIMIC source data
-1. Load mimic dataset using modified mimic-code tools:
-- https://github.com/djfunksalot/mimic-code
-(_Creates additional indexes_)
-
-
-2. Install modified OpenMRS fhir plugin:
-- https://github.com/djfunksalot/openmrs-module-fhir 
-(_supports adding observation with link to encounter_)
-
-3. initialize database
+4. Initialize source and destination databases
 - Create additional tables in mimic database to track openmrs issued uuids
 - Generate metadata for OpenMRS concepts
 ```bash
 ./import.py initDb
 ```
+5. Log into OpenMRS
 
-4. Initialize System
+6. Import records
 ```bash
 ./import.py initLocations
 ./import.py initPractitioners
@@ -64,14 +40,21 @@ cp neo_example.json neo.json  # edit this file for your environment
 ./import.py initAdmit
 ```
 
-#Import data into neo4j
-_depends on apoc-3.3.0.2-all.jar neo4j plugin_
-## start graphdb
+
+# Loading OpenMRS data into neo4j
+1. configure javascript environment
+```bash
+npm install
+cd js/
+cp config_example.js config.js  # edit this file for your environment
+cp neo_example.json neo.json  # edit this file for your environment
+```
+2. start graphdb server
 ```bash
 ./neo.js rebuild -sv
 ```
-
-## Import OpenMRS data 
+3. log into neo4j and set the password as defined in config.json
+4. generate the graph
 ```bash
 ./gengraph.js
 ```
