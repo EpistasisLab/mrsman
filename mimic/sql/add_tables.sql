@@ -38,6 +38,16 @@ delete from locations where location is null;
 CREATE UNIQUE INDEX location_idx ON locations (location);
 
 
+DROP TABLE if exists encountertypes;
+CREATE TABLE mimiciii.encountertypes
+(
+  row_id SERIAL,
+  encountertype character varying(50)
+);
+insert into encountertypes (encountertype) (select admission_type from admissions group by admission_type);
+CREATE UNIQUE INDEX encountertype_idx ON encountertypes (encountertype);
+
+
 DROP TABLE if exists visittypes;
 CREATE TABLE mimiciii.visittypes
 (
@@ -46,6 +56,17 @@ CREATE TABLE mimiciii.visittypes
 );
 insert into visittypes (visittype) (select admission_type from admissions group by admission_type);
 CREATE UNIQUE INDEX visittype_idx ON visittypes (visittype);
+
+
+DROP TABLE if exists notecategories;
+CREATE TABLE mimiciii.notecategories
+(
+  row_id SERIAL,
+  category character varying(50)
+);
+insert into notecategories (category) (select category from noteevents group by category);
+CREATE UNIQUE INDEX notecategory_idx ON notecategories (category);
+
 
 drop table if exists deltadate;
 create table deltadate as select floor(EXTRACT(epoch FROM(min(admissions.admittime)-'2000-01-01'))/(3600*24)) as offset,subject_id from admissions group by subject_id;

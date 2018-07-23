@@ -17,6 +17,8 @@ import sys
 from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
+baseuri = "http://localhost:8080/openmrs/ws"
+db = 'ann'
 
 
 # UTILITY
@@ -94,6 +96,15 @@ def getSrcUuid(table, Dict):
         print(e)
         exit()
 
+#load all note categories into an array for easy searching
+def getNoteCategories():
+    cur = getSrcUuid('notecategories', None)
+    categories = {}
+    for category in cur:
+        categories[category.category] = category.uuid
+    return (categories)
+
+
 #load all locations into an array for easy searching
 def getLocations():
     cur = getSrcUuid('locations', None)
@@ -117,6 +128,15 @@ def getdLabItems():
     for labitem in cur:
         labitems[labitem.itemid] = labitem.uuid
     return(labitems) 
+
+
+#load all caregivers into an array for easy searching
+def getdItems():
+    cur = getSrcUuid('d_items', None)
+    ditems = {}
+    for ditem in cur:
+        ditems[ditem.itemid] = ditem.uuid
+    return(ditems) 
 
 
 
@@ -178,29 +198,40 @@ def loadPgsqlFile(filename):
         print(e)
         exit()
 
-
 #post a json encoded record to the fhir/rest interface
 def postDict(endpoint, table, Dict):
     if (endpoint == 'fhir'):
-        uri = "http://localhost:8080/openmrs/ws/fhir/" + table.capitalize()
+        uri = baseuri + "/fhir/" + table.capitalize()
     else:
-        uri = "http://localhost:8080/openmrs/ws/rest/v1/" + table
+        uri = baseuri + "/rest/v1/" + table
     r = requests.post(uri, json=Dict, auth=HTTPBasicAuth('admin', 'Admin123'))
+    if debug:
+        print('post:')
+        print(Dict)
+        print('response:')
+        print(r)
     if ("Location" in r.headers):
         return (r.headers['Location'].split('/').pop())
     else:
-        print("Unexpected response:")
-        print(r.text)
+        response = json.loads(r.text)
+        if ('uuid' in response):
+            uuid = response['uuid']
+            return(uuid)
+        else:
+            print("Unexpected response:")
+            print(r.text)
         return(False)
+
+
 
 #post a json encoded record to the fhir/rest interface
 def putDict(endpoint, table, Dict):
     new_uuid = str(uuid.uuid4())
     Dict['id'] = new_uuid;
     if (endpoint == 'fhir'):
-        uri = "http://localhost:8080/openmrs/ws/fhir/" + table.capitalize() + "/" + new_uuid
+        uri = baseuri + "/fhir/" + table.capitalize() + "/" + new_uuid
     else:
-        uri = "http://localhost:8080/openmrs/ws/rest/v1/" + table
+        uri = baseuri + "/rest/v1/" + table
     r = requests.put(uri, json=Dict, auth=HTTPBasicAuth('admin', 'Admin123'))
     if ("Location" in r.headers):
         return (r.headers['Location'].split('/').pop())
@@ -240,7 +271,7 @@ def getAdmissionData(admission):
 
 
 def addNote(admission,note,parent_uuid):
-    concept_uuid = 'ee66d791-2804-4ed2-9cb1-d1664a42b04c';
+    concept_uuid = notecategory_array[note.category]
     observation = {
        "resourceType": "Observation",
         "code": {
@@ -271,6 +302,38 @@ def addNote(admission,note,parent_uuid):
     observation_uuid = postDict('fhir', 'observation', observation)
     return(observation_uuid)
 
+
+def addChart(admission,chart,parent_uuid):
+    concept_uuid = ditems_array[chart.itemid]
+    observation = {
+       "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                # "display": "Text of encounter note"
+                "system": "http://openmrs.org",
+                "code": concept_uuid
+            }]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "effectiveDateTime": deltaDate(chart.charttime, admission.offset),
+        "issued": deltaDate(chart.charttime, admission.offset),
+        "value": chart.value,
+            "context": {
+            "reference": "Encounter/" + parent_uuid,
+        }
+    }
+    if(chart.cgid):
+        cg_uuid = caregiver_array[chart.cgid];
+        performer = [
+             {
+              "reference": "Practitioner/"+cg_uuid,
+             }
+        ]
+        observation['performer'] = performer;
+    observation_uuid = postDict('fhir', 'observation', observation)
+    return(observation_uuid)
 
 
 
@@ -354,12 +417,17 @@ def caregiversToPractitioners(limit):
                 "birthDate": birthdate,
                 "active": True
             })
-        uuid_cur = insertPgDict('uuids', {
-            'src': src,
-            'row_id': record.row_id,
-            'uuid': uuid
-        })
-        uuid_cur.close()
+        if uuid:
+            uuid_cur = insertPgDict('uuids', {
+                'src': src,
+                'row_id': record.row_id,
+                'uuid': uuid
+            })
+            uuid_cur.close()
+        else:
+            print("Caregiver not created")
+            pg_conn.commit()
+            exit()
     concept_cur.close()
     pg_conn.commit()
 
@@ -424,6 +492,7 @@ def admissionsToEncounters(limit):
             "finished",
             "type": [{
                 "coding": [{
+#                    "display": record.admission_type
                     "code": record.visit_type_code
                 }]
             }],
@@ -460,7 +529,7 @@ def admissionsToEncounters(limit):
             "finished",
             "type": [{
                 "coding": [{
-                    "display": "admit"
+                    "display": record.admission_type
                 }]
             }],
             "subject": {
@@ -495,7 +564,9 @@ def admissionsToEncounters(limit):
                 "status": "finished",
                 "type": [{
                     "coding": [{
-                        "display": "icustay"
+#                        "display": "icustay"
+                         "display": record.admission_type
+#                        "display": "icustay"
                     }]
                 }],
                 "subject": {
@@ -522,6 +593,8 @@ def admissionsToEncounters(limit):
             stay_array[icustay.icustay_id] = child_uuid
         for note in admission_data['noteevents']:
             addNote(record,note,parent_uuid)
+        for chart in admission_data['chartevents']:
+            addChart(record,chart,parent_uuid)
          
     admissions_cur.close()
     pg_conn.commit()
@@ -552,6 +625,47 @@ def locationsToLocations():
     pg_conn.commit()
 
 
+# post locations to openmrs fhir interface
+def postEncounterTypes():
+    src = 'encountertypes'
+    et_cur = getSrc(src, None)
+    for record in et_cur:
+        uuid=postDict(
+            'rest',
+            'encountertype',
+            {
+                "name": record.encountertype,
+                "description": record.encountertype,
+            })
+        uuid_cur = insertPgDict('uuids', {
+            'src': src,
+            'row_id': record.row_id,
+            'uuid': uuid
+        })
+        uuid_cur.close()
+    et_cur.close()
+    pg_conn.commit()
+
+# post locations to openmrs fhir interface
+def postVisitTypes():
+    src = 'visittypes'
+    et_cur = getSrc(src, None)
+    for record in et_cur:
+        uuid=postDict(
+            'rest',
+            'visittype',
+            {
+                "name": record.visittype,
+                "description": record.visittype,
+            })
+        uuid_cur = insertPgDict('uuids', {
+            'src': src,
+            'row_id': record.row_id,
+            'uuid': uuid
+        })
+        uuid_cur.close()
+    et_cur.close()
+    pg_conn.commit()
 
 
 # summarize labevents
@@ -630,6 +744,56 @@ def dlabitemsToConcepts():
             uuid_cur.close()
     concept_cur.close()
     pg_conn.commit()
+
+
+# insert unique diagnoses into openmrs concept table
+def notecategoriesToConcepts():
+    src = 'notecategories'
+    concept_cur = getSrc(src, None)
+    for record in concept_cur:
+        date = time.strftime('%Y-%m-%d %H:%M:%S')
+        concept_uuid = str(uuid.uuid4())
+        concept_id = insertDict(
+            'concept', {
+                "datatype_id": "3",
+                "date_created": date,
+                "class_id": "7",
+                "creator": "1",
+                "uuid": concept_uuid
+            })
+        insertDict(
+            'concept_name', {
+                "concept_id": concept_id,
+                "name": record.category,
+                "date_created": date,
+                "creator": "1",
+                "locale": "en",
+                "locale_preferred": "1",
+                "concept_name_type": "FULLY_SPECIFIED",
+                "uuid": str(uuid.uuid4())
+            })
+        insertDict(
+            'concept_name', {
+                "concept_id": concept_id,
+                "name": record.category,
+                "date_created": date,
+                "creator": "1",
+                "locale": "en",
+                "locale_preferred": "0",
+                "concept_name_type": "SHORT",
+                "uuid": str(uuid.uuid4())
+            })
+        uuid_cur = insertPgDict('uuids', {
+            'src': src,
+            'row_id': record.row_id,
+            'uuid': concept_uuid
+        })
+        uuid_cur.close()
+    concept_cur.close()
+    pg_conn.commit()
+
+
+# insert unique diagnoses into openmrs concept table
 
 
 # insert unique diagnoses into openmrs concept table
@@ -810,8 +974,10 @@ def initDb():
     diagnosesToConcepts()
     print("generate concepts from ditems")
     ditemsToConcepts()
-    print("generate visit types")
-    visittypestoVisitTypes()
+    #print("generate visit types")
+    #visittypestoVisitTypes()
+    print("generate note categories")
+    notecategoriesToConcepts()
 
 
 #initialize
@@ -819,12 +985,20 @@ def initLocations():
     locationsToLocations()
 
 
+def initEncounterTypes():
+    postEncounterTypes()
+
+def initVisitTypes():
+    postVisitTypes()
+
+
+
 def initPractitioners():
     caregiversToPractitioners(None)
 
 
 def initPatients():
-    patientsToPatients('1000')
+    patientsToPatients('1')
     initAdmit()
 
 
@@ -832,9 +1006,13 @@ def initAdmit():
     global location_array
     global caregiver_array
     global labitems_array
+    global ditems_array
+    global notecategory_array
+    notecategory_array = getNoteCategories()
     location_array = getLocations()
     caregiver_array = getCaregivers()
     labitems_array = getdLabItems()
+    ditems_array = getdItems()
     admissionsToEncounters(None)
 
 
@@ -853,7 +1031,7 @@ if (len(sys.argv) > 1):
 #connect to openmrs mysql
     try:
         mysql_conn = pymysql.connect(
-            host='127.0.0.1', user='root', passwd='password', db='ann')
+            host='127.0.0.1', user='root', passwd='password', db=db)
         mysql_cur = mysql_conn.cursor()
     except:
         print("unable to connect to the mysql database")
