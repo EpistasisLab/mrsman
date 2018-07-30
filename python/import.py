@@ -303,7 +303,7 @@ def addNote(admission,note,parent_uuid):
     return(observation_uuid)
 
 
-def addChart(admission,chart,parent_uuid):
+def addtxtChart(admission,chart,parent_uuid):
     concept_uuid = ditems_array[chart.itemid]
     observation = {
        "resourceType": "Observation",
@@ -320,6 +320,43 @@ def addChart(admission,chart,parent_uuid):
         "effectiveDateTime": deltaDate(chart.charttime, admission.offset),
         "issued": deltaDate(chart.charttime, admission.offset),
         "value": chart.value,
+            "context": {
+            "reference": "Encounter/" + parent_uuid,
+        }
+    }
+    if(chart.cgid):
+        cg_uuid = caregiver_array[chart.cgid];
+        performer = [
+             {
+              "reference": "Practitioner/"+cg_uuid,
+             }
+        ]
+        observation['performer'] = performer;
+    observation_uuid = postDict('fhir', 'observation', observation)
+    return(observation_uuid)
+
+
+def addnumChart(admission,chart,parent_uuid):
+    concept_uuid = ditems_array[chart.itemid]
+    observation = {
+       "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                # "display": "Text of encounter note"
+                "system": "http://openmrs.org",
+                "code": concept_uuid
+            }]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "effectiveDateTime": deltaDate(chart.charttime, admission.offset),
+        "issued": deltaDate(chart.charttime, admission.offset),
+        "valueQuantity": {
+            "value": chart.valuenum,
+            "unit": chart.valueuom,
+            "system": "http://unitsofmeasure.org",
+        },
             "context": {
             "reference": "Encounter/" + parent_uuid,
         }
@@ -594,7 +631,10 @@ def admissionsToEncounters(limit):
         for note in admission_data['noteevents']:
             addNote(record,note,parent_uuid)
         for chart in admission_data['chartevents']:
-            addChart(record,chart,parent_uuid)
+            if (chart.valuenum):
+              addnumChart(record,chart,parent_uuid)
+            else:
+              addtxtChart(record,chart,parent_uuid)
          
     admissions_cur.close()
     pg_conn.commit()
@@ -667,6 +707,53 @@ def postVisitTypes():
     et_cur.close()
     pg_conn.commit()
 
+# summarize chartevents
+def getchartItems_num():
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select max(valuenum) max,min(valuenum),avg(valuenum),itemid,json_agg(distinct(valueuom)) units from chartevents where valuenum is not null group by itemid order by itemid;"
+    items = {}
+    try:
+        pg_cur.execute(stmt)
+        for item in pg_cur:
+          units = None
+          #pick non-empty units
+          for u in item.units:
+            if not units and u and not u.isspace():
+              units = u
+          items[item.itemid] = {
+            'units':item.units[0],
+            'max':item.max,
+            'min':item.min
+          }
+        pg_cur.close()
+        return(items)
+    except Exception as e:
+        print("can't select from chartevents")
+        print(e)
+        exit()
+
+
+# summarize chartevents
+def getchartItems_txt():
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "SELECT itemid from chartevents where not value ~ '^([0-9]+[.]?[0-9]*|[.][0-9]+)$' group by itemid"
+    items = {}
+    try:
+        pg_cur.execute(stmt)
+        for item in pg_cur:
+          #pick non-empty units
+          items[item.itemid] = {
+            'itemid':item.itemid,
+          }
+        pg_cur.close()
+        return(items)
+    except Exception as e:
+        print("can't select from chartevents")
+        print(e)
+        exit()
+
+
+
 
 # summarize labevents
 def getlabItems():
@@ -692,6 +779,101 @@ def getlabItems():
         print("can't select from labevents")
         print(e)
         exit()
+
+
+# insert unique diagnoses into openmrs concept table
+def chartitemsnumToConcepts():
+    src = 'd_items'
+    items = getchartItems_num()
+    concept_cur = getSrc(src, None)
+    for record in concept_cur:
+        if record.itemid in items.keys():
+            item = items[record.itemid]
+            if record.label == '' or record.label is None:
+                description = '[NO TEXT]'
+            else:
+                description = record.label
+            date = time.strftime('%Y-%m-%d %H:%M:%S')
+            concept_uuid = str(uuid.uuid4())
+            concept_id = insertDict(
+                'concept', {
+                    "datatype_id": "1",
+                    "date_created": date,
+                    "class_id": "1",
+                    "creator": "1",
+                    "uuid": concept_uuid
+                })
+            insertDict(
+                'concept_name', {
+                    "concept_id": concept_id,
+                    "name": description,
+                    "date_created": date,
+                    "creator": "1",
+                    "locale": "en",
+                    "locale_preferred": "1",
+                    "concept_name_type": "SHORT",
+                    "uuid": str(uuid.uuid4())
+                })
+            numeric={
+                    "concept_id": concept_id,
+                    "precise": "1",
+                    "hi_absolute":item['max'],
+                    "low_absolute":item['min'],
+                }
+            if item['units']:
+                numeric["units"]=item['units']
+            insertDict('concept_numeric',numeric)
+            uuid_cur = insertPgDict('uuids', {
+                'src': src,
+                'row_id': record.row_id,
+                'uuid': concept_uuid
+            })
+            uuid_cur.close()
+    concept_cur.close()
+    pg_conn.commit()
+
+
+# insert unique diagnoses into openmrs concept table
+def chartitemstxtToConcepts():
+    src = 'd_items'
+    items = getchartItems_txt()
+    concept_cur = getSrc(src, None)
+    for record in concept_cur:
+        if record.itemid in items.keys():
+            item = items[record.itemid]
+            if record.label == '' or record.label is None:
+                description = '[NO TEXT]'
+            else:
+                description = record.label
+            date = time.strftime('%Y-%m-%d %H:%M:%S')
+            concept_uuid = str(uuid.uuid4())
+            concept_id = insertDict(
+                'concept', {
+                    "datatype_id": "3",
+                    "date_created": date,
+                    "class_id": "1",
+                    "creator": "1",
+                    "uuid": concept_uuid
+                })
+            insertDict(
+                'concept_name', {
+                    "concept_id": concept_id,
+                    "name": description,
+                    "date_created": date,
+                    "creator": "1",
+                    "locale": "en",
+                    "locale_preferred": "1",
+                    "concept_name_type": "SHORT",
+                    "uuid": str(uuid.uuid4())
+                })
+            uuid_cur = insertPgDict('uuids', {
+                'src': src,
+                'row_id': record.row_id,
+                'uuid': concept_uuid
+            })
+            uuid_cur.close()
+    concept_cur.close()
+    pg_conn.commit()
 
 
 # insert unique diagnoses into openmrs concept table
@@ -972,28 +1154,21 @@ def initDb():
     icd9ToConcepts()
     print("generate concepts from diagnoses")
     diagnosesToConcepts()
-    print("generate concepts from ditems")
-    ditemsToConcepts()
-    #print("generate visit types")
-    #visittypestoVisitTypes()
+    #print("generate concepts from ditems")
+    #ditemsToConcepts()
+    print("generate numeric concepts from chartevents")
+    chartitemsnumToConcepts()
+    print("generate text concepts from chartevents")
+    chartitemstxtToConcepts()
     print("generate note categories")
     notecategoriesToConcepts()
 
 
 #initialize
-def initLocations():
+def initRestResources():
     locationsToLocations()
-
-
-def initEncounterTypes():
     postEncounterTypes()
-
-def initVisitTypes():
     postVisitTypes()
-
-
-
-def initPractitioners():
     caregiversToPractitioners(None)
 
 

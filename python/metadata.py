@@ -29,3 +29,10 @@ services={
     "TSURG":"Thoracic Surgical - surgery on the thorax, located between the neck and the abdomen",
     "VSURG":"Vascular Surgical - surgery relating to the circulatory system",
 }
+chartstruct={
+    "resultstatus":["Final","Manual"],
+    "stopped":["NotStopd","D/C'd"]
+    "warning":bool,
+    "error":bool
+    }
+}

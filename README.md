@@ -69,3 +69,4 @@ cp neo_example.json neo.json  # edit this file for your environment
 3. associate caregivers with encounters?
 4. Define notevent concepts
 5. Create cause-of-death observations
+6. Update fhir module to set cause of death to 'UNKNOWN' when adding deceased patients (so we don't need to disable validation)

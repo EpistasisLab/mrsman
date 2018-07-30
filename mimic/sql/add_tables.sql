@@ -68,7 +68,31 @@ insert into notecategories (category) (select category from noteevents group by 
 CREATE UNIQUE INDEX notecategory_idx ON notecategories (category);
 
 
+-- offset to set events in the past
 drop table if exists deltadate;
 create table deltadate as select floor(EXTRACT(epoch FROM(min(admissions.admittime)-'2000-01-01'))/(3600*24)) as offset,subject_id from admissions group by subject_id;
-drop table if exists chartcounts;
-create table chartcounts as select label,sum(num) num,json_agg(ce.itemid) itemids from (select count(*) num,itemid from chartevents group by itemid) ce left join d_items on d_items.itemid = ce.itemid group by label order by num desc; 
+
+
+--  extract text data
+drop table if exists cetxt_tmp;
+create temporary table cetxt_tmp as select value,itemid,count(*) num from chartevents where value ~ '[a-zA-Z]'  and valuenum is null  group by itemid,value order by itemid;
+
+-- map common text values
+drop table if exists cetxt_map;
+create table cetxt_map as select cetxt_tmp.value,summary.itemid from (select itemid,round(sum(num)/count(*)) density from cetxt_tmp group by itemid order by density) summary left join cetxt_tmp on cetxt_tmp.itemid = summary.itemid where summary.density > 1000 order by itemid,value;
+drop table if exists cetxt;
+CREATE TABLE mimiciii.cetxt
+(
+  row_id SERIAL,
+  value character varying(255)
+);
+insert into cetxt (value) select value from cetxt_map group by value order by value;
+
+
+-- generate metadata for numeric chart data
+create temporary table cenum_tmp_1 as select itemid,valueuom,count(*) from chartevents where valuenum is not null group by itemid,valueuom order by itemid;
+create temporary table cenum_tmp_2 as select max(valuenum) max_val,min(valuenum) min_val,avg(valuenum) avg_val,itemid,count(*) from chartevents where valuenum is not null group by itemid order by itemid,count desc;
+
+drop table if exists cenum;
+create table cenum as select cenum_tmp_2.itemid,min_val,avg_val,max_val,unitcounts.valueuom units,cenum_tmp_2.count num from cenum_tmp_2 left join (SELECT (mi).* FROM (SELECT  (SELECT mi FROM cenum_tmp_1 mi WHERE  mi.itemid = m.itemid ORDER BY count DESC LIMIT 1) AS mi FROM  cenum_tmp_1 m GROUP BY itemid) q ORDER BY  (mi).itemid) unitcounts on cenum_tmp_2.itemid = unitcounts.itemid;
+
