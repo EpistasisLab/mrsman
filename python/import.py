@@ -169,8 +169,25 @@ def insertDict(table, Dict):
     except Exception as e:
         print("can't insert into  " + table)
         print(e)
+        print('failed record')
+        print(Dict)
         exit()
 
+#create record in mimic database
+def updatePgDict(table, Dict, Filter):
+    pg_cur = pg_conn.cursor()
+    placeholder = ", ".join(["%s"] * len(Dict))
+    stmt = "update {table} ({columns}) values ({values});".format(
+        table=table, columns=",".join(Dict.keys()), values=placeholder)
+    for col_name in Filter:
+        stmt += " where " + col_name + " = '" + str(Filter[col_name]) + "'"
+    try:
+        pg_cur.execute(stmt, list(Dict.values()))
+        return pg_cur
+    except Exception as e:
+        print("can't insert into  " + table)
+        print(e)
+        exit()
 
 #create record in mimic database
 def insertPgDict(table, Dict):
@@ -1029,6 +1046,76 @@ def ditemsToConcepts():
     pg_conn.commit()
 
 
+# insert concepts into openmrs concept table
+def conceptsToConcepts():
+    src = 'concepts'
+    concept_cur = getSrc(src, None)
+    for record in concept_cur:
+        #if record.diagnosis == '' or record.diagnosis is None:
+        #    description = '[NO TEXT]'
+        #else:
+        #    description = record.diagnosis
+        date = time.strftime('%Y-%m-%d %H:%M:%S')
+        concept_uuid = str(uuid.uuid4())
+        concept = {
+                "class_id": record.concept_class_id,
+                "datatype_id": record.concept_datatype_id,
+                "date_created": date,
+                "creator": "1",
+                "uuid": concept_uuid
+        }
+        concept_id = None
+        #print(concept);
+        concept_id = insertDict('concept',concept)
+        concept_name_1 = {
+                "concept_id": concept_id,
+                "name": record.shortname,
+                "date_created": date,
+                "creator": "1",
+                "locale": "en",
+                "locale_preferred": "0",
+                "concept_name_type": "SHORT",
+                "uuid": str(uuid.uuid4())
+            }
+        insertDict('concept_name',concept_name_1)
+        concept_name_2 = {
+                "concept_id": concept_id,
+                "name": record.longname,
+                "date_created": date,
+                "creator": "1",
+                "locale": "en",
+                "locale_preferred": "1",
+                "concept_name_type": "FULLY_SPECIFIED",
+                "uuid": str(uuid.uuid4())
+            }
+        insertDict('concept_name',concept_name_2)
+        concept_description =  {
+                "concept_id": concept_id,
+                "date_created": date,
+                "date_changed": date,
+                "locale": "en",
+                "creator": "1",
+                "changed_by": "1",
+                "description": record.shortname,
+                "uuid": str(uuid.uuid4())
+            }
+        insertDict('concept_description',concept_description)
+        uuid_cur = insertPgDict('uuids', {
+            'src': src,
+            'row_id': record.row_id,
+            'uuid': concept_uuid
+        })
+        uuid_cur.close()
+        update_cur = updatePgDict('concepts', {
+            'row_id': record.row_id,
+        },{
+            'openmrs_id': concept_id,
+        })
+        update_cur.close()
+    concept_cur.close()
+    pg_conn.commit()
+
+
 # insert unique diagnoses into openmrs concept table
 def diagnosesToConcepts():
     src = 'diagnoses'
@@ -1149,19 +1236,24 @@ def initDb():
     print("initializing database")
     loadPgsqlFile('../mimic/sql/add_tables.sql')
     print("generate concepts from d_labitems")
-    dlabitemsToConcepts()
+    #dlabitemsToConcepts()
+    print("generate concepts from d_labitems")
+    #dlabitemsToConcepts()
     print("generate concepts from icd9 codes")
-    icd9ToConcepts()
+    #icd9ToConcepts()
     print("generate concepts from diagnoses")
-    diagnosesToConcepts()
+    #diagnosesToConcepts()
     #print("generate concepts from ditems")
     #ditemsToConcepts()
     print("generate numeric concepts from chartevents")
-    chartitemsnumToConcepts()
+    #chartitemsnumToConcepts()
     print("generate text concepts from chartevents")
-    chartitemstxtToConcepts()
+    #chartitemstxtToConcepts()
     print("generate note categories")
-    notecategoriesToConcepts()
+    #notecategoriesToConcepts()
+
+def initConcepts():
+    conceptsToConcepts()
 
 
 #initialize

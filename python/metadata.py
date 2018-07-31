@@ -31,8 +31,7 @@ services={
 }
 chartstruct={
     "resultstatus":["Final","Manual"],
-    "stopped":["NotStopd","D/C'd"]
+    "stopped":["NotStopd","D/C'd"],
     "warning":bool,
     "error":bool
-    }
 }
