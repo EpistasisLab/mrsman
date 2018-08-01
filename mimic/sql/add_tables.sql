@@ -69,7 +69,8 @@ CREATE TABLE mimiciii.concepts
   linksto character varying(50),
   concept_type character varying(50),
   concept_class_id integer,
-  concept_datatype_id integer
+  concept_datatype_id integer,
+  uuid uuid
 );
 CREATE UNIQUE INDEX conceptname_idx ON concepts (longname);
 
@@ -82,7 +83,7 @@ insert into concepts (itemid,shortname,longname,concept_type,linksto) select ite
 drop table if exists cetxt_map;
 create table cetxt_map as select cetxt_tmp.value,summary.itemid from (select itemid,round(sum(num)/count(*)) density from cetxt_tmp group by itemid order by density) summary left join cetxt_tmp on cetxt_tmp.itemid = summary.itemid where summary.density > 1000 order by itemid,value;
 -- add common chartevent text values as concepts
-insert into concepts (longname,shortname,concept_type) select concat(value,' [common response]'),value,'charttext' from cetxt_map group by value order by value;
+insert into concepts (longname,shortname,concept_type) select concat(value,' [answer]'),value,'answer' from cetxt_map group by value order by value;
 
 
 -- Process numeric chart data
@@ -108,7 +109,7 @@ insert into concepts (shortname,longname,concept_type) (select category,concat(c
 --delete from concepts where concept_type  = 'test_enum' and itemid not in (select itemid from cetxt_map) and linksto = 'chartevents'; 
 --delete from concepts where concept_type = 'test_num' and itemid not in (select itemid from cenum) and linksto = 'chartevents';
 delete from concepts where shortname is null;
-update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'charttext';
+update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';
 update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'diagnosis';
 update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_type  = 'category';
 update concepts set concept_class_id = 1, concept_datatype_id = 1 where concept_type  = 'test_num';

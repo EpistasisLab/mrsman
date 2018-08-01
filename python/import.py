@@ -33,11 +33,6 @@ def randomDate(start, end):
     return time.strftime(date_format, time.localtime(ptime)) + 'T00:00:00'
 
 
-#shift dates back 200 years
-def shiftDate(src_date):
-    return str((src_date + relativedelta(years=-200)).isoformat())
-
-
 #shift dates by offset number of hours
 def deltaDate(src_date, offset):
     return str((src_date + relativedelta(days=-offset)).isoformat())
@@ -95,6 +90,20 @@ def getSrcUuid(table, Dict):
         print("can't select from " + table)
         print(e)
         exit()
+
+
+def getConceptMap():
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select concepts.openmrs_id parent_id,cm.openmrs_id child_id from (select cetxt_map.itemid,concepts.openmrs_id from cetxt_map left join concepts on cetxt_map.value = concepts.shortname and concepts.concept_type = 'charttext') cm left join concepts on cm.itemid = concepts.itemid and concepts.concept_type = 'test_enum'"
+    try:
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+        print("can't select from " + table)
+        print(e)
+        exit()
+
+
 
 #load all note categories into an array for easy searching
 def getNoteCategories():
@@ -177,7 +186,7 @@ def insertDict(table, Dict):
 def updatePgDict(table, Dict, Filter):
     pg_cur = pg_conn.cursor()
     placeholder = ", ".join(["%s"] * len(Dict))
-    stmt = "update {table} ({columns}) values ({values});".format(
+    stmt = "update {table} set ({columns}) = ({values})".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
     for col_name in Filter:
         stmt += " where " + col_name + " = '" + str(Filter[col_name]) + "'"
@@ -517,8 +526,6 @@ def patientsToPatients(limit):
             "active":
             True
         }
-        #      if(record.dod):
-        #        patient["deceasedDateTime"]=shiftDate(record.dod)
         uuid = postDict('fhir', 'patient', patient)
         uuid_cur = insertPgDict('uuids', {
             'src': src,
@@ -1065,7 +1072,6 @@ def conceptsToConcepts():
                 "uuid": concept_uuid
         }
         concept_id = None
-        #print(concept);
         concept_id = insertDict('concept',concept)
         concept_name_1 = {
                 "concept_id": concept_id,
@@ -1107,14 +1113,37 @@ def conceptsToConcepts():
         })
         uuid_cur.close()
         update_cur = updatePgDict('concepts', {
-            'row_id': record.row_id,
-        },{
             'openmrs_id': concept_id,
+        },{
+            'row_id': record.row_id,
+        })
+        update_cur = updatePgDict('concepts', {
+            'uuid': concept_uuid,
+        },{
+            'row_id': record.row_id,
         })
         update_cur.close()
     concept_cur.close()
     pg_conn.commit()
 
+def genConceptMap():
+    concept_cur = getConceptMap()
+    for record in concept_cur:
+        date = time.strftime('%Y-%m-%d %H:%M:%S')
+        concept_uuid = str(uuid.uuid4())
+        concept_answer = {
+                "concept_id": record.parent_id,
+                "answer_concept": record.child_id,
+                "date_created": date,
+                "creator": "1",
+                "uuid": concept_uuid
+        }
+        insertDict('concept_answer',concept_answer);
+    concept_cur.close()
+    pg_conn.commit()
+
+
+# insert unique diagnoses into openmrs concept table
 
 # insert unique diagnoses into openmrs concept table
 def diagnosesToConcepts():
@@ -1235,26 +1264,10 @@ def icd9ToConcepts():
 def initDb():
     print("initializing database")
     loadPgsqlFile('../mimic/sql/add_tables.sql')
-    print("generate concepts from d_labitems")
-    #dlabitemsToConcepts()
-    print("generate concepts from d_labitems")
-    #dlabitemsToConcepts()
-    print("generate concepts from icd9 codes")
-    #icd9ToConcepts()
-    print("generate concepts from diagnoses")
-    #diagnosesToConcepts()
-    #print("generate concepts from ditems")
-    #ditemsToConcepts()
-    print("generate numeric concepts from chartevents")
-    #chartitemsnumToConcepts()
-    print("generate text concepts from chartevents")
-    #chartitemstxtToConcepts()
-    print("generate note categories")
-    #notecategoriesToConcepts()
-
-def initConcepts():
+    print("generate concepts")
     conceptsToConcepts()
-
+    print("link mapped concepts")
+    genConceptMap()
 
 #initialize
 def initRestResources():
