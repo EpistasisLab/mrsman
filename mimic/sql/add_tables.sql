@@ -120,8 +120,6 @@ insert into concepts (shortname,longname,concept_type) (select category,concat(c
 update concepts set min_val = cenum.min_val, max_val = cenum.max_val, avg_val = cenum.avg_val, units = cenum.units from cenum where  concepts.itemid = cenum.itemid and concepts.concept_type = 'test_num';
 update concepts set min_val = lenum.min_val, max_val = lenum.max_val, avg_val = lenum.avg_val, units = lenum.units from lenum where  concepts.itemid = lenum.itemid and concepts.concept_type = 'test_num';
 
--- remove unneeded enum concepts
-delete from concepts where linksto = 'chartevents' and concept_type = 'test_enum' and itemid not in (select itemid from cetxt_map);
 update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';
 update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'diagnosis';
 update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_type  = 'category';
@@ -138,3 +136,6 @@ delete from concepts where shortname is null;
 delete from concepts where concept_type = 'test_num' and avg_val is null;
 delete from concepts where concept_type = 'test_text' and linksto = 'chartevents' and itemid not in (select distinct(itemid) from chartevents where value ~ '[a-zA-Z]');
 delete from concepts where concept_type = 'test_text' and linksto = 'labevents' and itemid in (select distinct(itemid) from labevents where value ~ '[a-zA-Z]');
+--delete from concepts where linksto in ('inputevents_cv','outputevents','datetimeevents','procedureevents_mv','inputevents_mv','microbiologyevents');
+-- remove unneeded enum concepts
+delete from concepts where linksto = 'chartevents' and concept_type = 'test_enum' and itemid not in (select itemid from cetxt_map);
