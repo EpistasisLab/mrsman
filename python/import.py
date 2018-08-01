@@ -94,7 +94,7 @@ def getSrcUuid(table, Dict):
 
 def getConceptMap():
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt = "select concepts.openmrs_id parent_id,cm.openmrs_id child_id from (select cetxt_map.itemid,concepts.openmrs_id from cetxt_map left join concepts on cetxt_map.value = concepts.shortname and concepts.concept_type = 'charttext') cm left join concepts on cm.itemid = concepts.itemid and concepts.concept_type = 'test_enum'"
+    stmt = "select concepts.openmrs_id parent_id,cm.openmrs_id child_id from (select cetxt_map.itemid,concepts.openmrs_id from cetxt_map left join concepts on cetxt_map.value = concepts.shortname and concepts.concept_type = 'answer') cm left join concepts on cm.itemid = concepts.itemid and concepts.concept_type = 'test_enum'"
     try:
         pg_cur.execute(stmt)
         return pg_cur
@@ -847,6 +847,9 @@ def chartitemsnumToConcepts():
             if item['units']:
                 numeric["units"]=item['units']
             insertDict('concept_numeric',numeric)
+
+
+
             uuid_cur = insertPgDict('uuids', {
                 'src': src,
                 'row_id': record.row_id,
@@ -1106,6 +1109,16 @@ def conceptsToConcepts():
                 "uuid": str(uuid.uuid4())
             }
         insertDict('concept_description',concept_description)
+        if record.avg_val:
+            numeric={
+                    "concept_id": concept_id,
+                    "precise": "1",
+                    "hi_absolute":record.max_val,
+                    "low_absolute":record.min_val
+                }
+            if record.units:
+                numeric["units"]=record.units
+            insertDict('concept_numeric',numeric)
         uuid_cur = insertPgDict('uuids', {
             'src': src,
             'row_id': record.row_id,
@@ -1114,11 +1127,6 @@ def conceptsToConcepts():
         uuid_cur.close()
         update_cur = updatePgDict('concepts', {
             'openmrs_id': concept_id,
-        },{
-            'row_id': record.row_id,
-        })
-        update_cur = updatePgDict('concepts', {
-            'uuid': concept_uuid,
         },{
             'row_id': record.row_id,
         })
@@ -1264,7 +1272,9 @@ def icd9ToConcepts():
 def initDb():
     print("initializing database")
     loadPgsqlFile('../mimic/sql/add_tables.sql')
-    print("generate concepts")
+
+def initConcepts():
+    print("import concepts")
     conceptsToConcepts()
     print("link mapped concepts")
     genConceptMap()
