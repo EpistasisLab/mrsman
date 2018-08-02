@@ -17,8 +17,8 @@ import sys
 from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
-baseuri = "http://localhost:8080/openmrs/ws"
-db = 'ann'
+baseuri = "http://localhost:8084/openmrs/ws"
+sister = 'kate'
 
 
 # UTILITY
@@ -37,13 +37,18 @@ def randomDate(start, end):
 def deltaDate(src_date, offset):
     return str((src_date + relativedelta(days=-offset)).isoformat())
 
+def openPgCursor():
+    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur.execute("SET search_path TO " + sister)
+    return(pg_cur)
+
 
 #
 # DATA I/O
 #
 #load not-yet-imported mimic records
 def getSrc(table, limit):
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
     stmt = "select * from " + table + " where row_id not in (select row_id from uuids where src = '" + table + "')"
     if (limit):
         stmt += " limit " + limit
@@ -58,7 +63,7 @@ def getSrc(table, limit):
 
 #load not-yet-imported mimic records joined to deltadate
 def getSrcDelta(table, limit):
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
     stmt = "select " + table + ".*,deltadate.offset from " + table + " left join deltadate on deltadate.subject_id = " + table + ".subject_id where row_id not in (select row_id from uuids where src = '" + table + "')"
     if (limit):
         stmt += " limit " + limit
@@ -75,7 +80,7 @@ def getSrcDelta(table, limit):
 
 #load imported mimic records with filter
 def getSrcUuid(table, Dict):
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
     stmt = "select " + table + ".*,uuids.uuid from " + table + " left join uuids on " + table + ".row_id = uuids.row_id and uuids.src = '" + table + "'"
     if Dict:
         for col_name in Dict:
@@ -93,7 +98,7 @@ def getSrcUuid(table, Dict):
 
 
 def getConceptMap():
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
     stmt = "select concepts.openmrs_id parent_id,cm.openmrs_id child_id from (select cetxt_map.itemid,concepts.openmrs_id from cetxt_map left join concepts on cetxt_map.value = concepts.shortname and concepts.concept_type = 'answer') cm left join concepts on cm.itemid = concepts.itemid and concepts.concept_type = 'test_enum'"
     try:
         pg_cur.execute(stmt)
@@ -124,7 +129,7 @@ def getLocations():
 
 #load all caregivers into an array for easy searching
 def getCaregivers():
-    cur = getSrcUuid('mimic.caregivers', None)
+    cur = getSrcUuid('mimiciii.caregivers', None)
     caregivers = {}
     for caregiver in cur:
         caregivers[caregiver.cgid] = caregiver.uuid
@@ -132,7 +137,7 @@ def getCaregivers():
 
 #load all caregivers into an array for easy searching
 def getdLabItems():
-    cur = getSrcUuid('mimic.d_labitems', None)
+    cur = getSrcUuid('mimiciii.d_labitems', None)
     labitems = {}
     for labitem in cur:
         labitems[labitem.itemid] = labitem.uuid
@@ -167,7 +172,8 @@ def getdItems():
 
 #load mimic records with filter
 def getSrcFilter(table, Dict):
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
+    #pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     stmt = "select * from " + table
     for col_name in Dict:
         stmt += " where " + col_name + " = '" + str(Dict[col_name]) + "'"
@@ -200,7 +206,8 @@ def insertDict(table, Dict):
 
 #create record in mimic database
 def updatePgDict(table, Dict, Filter):
-    pg_cur = pg_conn.cursor()
+    pg_cur = openPgCursor()
+    #pg_cur = pg_conn.cursor()
     placeholder = ", ".join(["%s"] * len(Dict))
     stmt = "update {table} set ({columns}) = ({values})".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
@@ -216,7 +223,8 @@ def updatePgDict(table, Dict, Filter):
 
 #create record in postgres database
 def insertPgDict(table, Dict):
-    pg_cur = pg_conn.cursor()
+    #pg_cur = pg_conn.cursor()
+    pg_cur = openPgCursor()
     placeholder = ", ".join(["%s"] * len(Dict))
     stmt = "insert into {table} ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
@@ -231,7 +239,8 @@ def insertPgDict(table, Dict):
 
 #run sql from file in mimic database
 def loadPgsqlFile(filename):
-    pg_cur = pg_conn.cursor()
+    pg_cur = openPgCursor()
+    #pg_cur = pg_conn.cursor()
     try:
         pg_cur.execute(open(filename, "r").read())
         return pg_cur
@@ -284,8 +293,9 @@ def putDict(endpoint, table, Dict):
 
 #load not-yet-imported admissions records for imported patients
 def getAdmissions(limit):
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime,deltadate.offset from mimic.admissions a left join (select uuid patient_uuid,patients.* from mimic.patients left join uuids on mimic.patients.row_id = uuids.row_id where uuids.src = 'mimic.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimic.admissions')"
+    pg_cur = openPgCursor()
+    #pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime,deltadate.offset from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'mimiciii.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimiciiii.admissions')"
     if (limit):
         stmt += " limit " + limit
     try:
@@ -418,8 +428,6 @@ def addnumChart(admission,chart,parent_uuid):
 
 
 def addLab(admission,lab,encounter_uuid):
-  print(lab)
-  try:
     concept_uuid = concepts_array['test_num'][lab.itemid]
     if(lab.valuenum and lab.valueuom):
       observation = {
@@ -480,7 +488,7 @@ def visittypestoVisitTypes():
 
 # post practitioners to openmrs fhir interface
 def caregiversToPractitioners(limit):
-    src = 'mimic.caregivers'
+    src = 'mimiciii.caregivers'
     concept_cur = getSrc(src, limit)
     for record in concept_cur:
         birthdate = randomDate("1900-01-01", "2000-01-01")
@@ -515,7 +523,7 @@ def caregiversToPractitioners(limit):
 
 # post patients to openmrs fhir interface
 def patientsToPatients(limit):
-    src = 'mimic.patients'
+    src = 'mimiciii.patients'
     patient_cur = getSrcDelta(src, limit)
     for record in patient_cur:
         gender = {"M": "male", "F": "female"}[record.gender]
@@ -751,7 +759,8 @@ def postVisitTypes():
 
 # summarize chartevents
 def getchartItems_num():
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
+    #pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     stmt = "select max(valuenum) max,min(valuenum),avg(valuenum),itemid,json_agg(distinct(valueuom)) units from chartevents where valuenum is not null group by itemid order by itemid;"
     items = {}
     try:
@@ -777,7 +786,8 @@ def getchartItems_num():
 
 # summarize chartevents
 def getchartItems_txt():
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
+    #pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     stmt = "SELECT itemid from chartevents where not value ~ '^([0-9]+[.]?[0-9]*|[.][0-9]+)$' group by itemid"
     items = {}
     try:
@@ -799,7 +809,8 @@ def getchartItems_txt():
 
 # summarize labevents
 def getlabItems():
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    pg_cur = openPgCursor()
+    #pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     stmt = "select max(valuenum) max,min(valuenum),avg(valuenum),itemid,json_agg(distinct(valueuom)) units from labevents where valuenum is not null group by itemid order by itemid;"
     items = {}
     try:
@@ -825,7 +836,7 @@ def getlabItems():
 
 # insert unique diagnoses into openmrs concept table
 def chartitemsnumToConcepts():
-    src = 'mimic.d_items'
+    src = 'mimiciiii.d_items'
     items = getchartItems_num()
     concept_cur = getSrc(src, None)
     for record in concept_cur:
@@ -880,7 +891,7 @@ def chartitemsnumToConcepts():
 
 # insert unique diagnoses into openmrs concept table
 def chartitemstxtToConcepts():
-    src = 'mimic.d_items'
+    src = 'mimiciii.d_items'
     items = getchartItems_txt()
     concept_cur = getSrc(src, None)
     for record in concept_cur:
@@ -923,7 +934,7 @@ def chartitemstxtToConcepts():
 
 # insert unique diagnoses into openmrs concept table
 def dlabitemsToConcepts():
-    src = 'mimic.d_labitems'
+    src = 'mimiciii.d_labitems'
     items = getlabItems()
     concept_cur = getSrc(src, None)
     for record in concept_cur:
@@ -1025,7 +1036,7 @@ def notecategoriesToConcepts():
 
 # insert unique diagnoses into openmrs concept table
 def ditemsToConcepts():
-    src = 'mimic.d_items'
+    src = 'mimiciii.d_items'
     concept_cur = getSrc(src, None)
     for record in concept_cur:
         if record.label == '' or record.label is None:
@@ -1329,15 +1340,16 @@ def initAdmit():
 if (len(sys.argv) > 1):
     try:
         pg_conn = psycopg2.connect(
-            "dbname='mimic' user='postgres' password='postgres'")
-    except:
+            dbname='mimic', user='postgres', password='postgres')
+    except Exception as e:
         print("unable to connect to the postgres databases")
+        print(e)
         exit()
 
 #connect to openmrs mysql
     try:
         mysql_conn = pymysql.connect(
-            host='127.0.0.1', user='root', passwd='password', db=db)
+            host='127.0.0.1', user='root', passwd='password', db=sister)
         mysql_cur = mysql_conn.cursor()
     except:
         print("unable to connect to the mysql database")
