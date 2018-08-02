@@ -107,7 +107,7 @@ def getConceptMap():
 
 #load all note categories into an array for easy searching
 def getNoteCategories():
-    cur = getSrcUuid('notecategories', None)
+    cur = getSrcUuid('mimic.notecategories', None)
     categories = {}
     for category in cur:
         categories[category.category] = category.uuid
@@ -124,7 +124,7 @@ def getLocations():
 
 #load all caregivers into an array for easy searching
 def getCaregivers():
-    cur = getSrcUuid('caregivers', None)
+    cur = getSrcUuid('mimic.caregivers', None)
     caregivers = {}
     for caregiver in cur:
         caregivers[caregiver.cgid] = caregiver.uuid
@@ -132,12 +132,28 @@ def getCaregivers():
 
 #load all caregivers into an array for easy searching
 def getdLabItems():
-    cur = getSrcUuid('d_labitems', None)
+    cur = getSrcUuid('mimic.d_labitems', None)
     labitems = {}
     for labitem in cur:
         labitems[labitem.itemid] = labitem.uuid
     return(labitems) 
 
+#load all caregivers into an array for easy searching
+def getConcepts():
+    cur = getSrcUuid('concepts', None)
+    concepts = {}
+    concepts['test_num'] = {}
+    concepts['test_text'] = {}
+    concepts['test_enum'] = {}
+    concepts['diagnosis'] = {}
+    concepts['answer'] = {}
+    concepts['category'] = {}
+    for concept in cur:
+        if concept.concept_type in ['test_num','test_text','test_enum']:
+            concepts[concept.concept_type][concept.itemid] = concept.uuid
+        elif concept.concept_type in ['diagnosis','answer','category']:
+            concepts[concept.concept_type][concept.shortname] = concept.uuid
+    return concepts
 
 #load all caregivers into an array for easy searching
 def getdItems():
@@ -198,7 +214,7 @@ def updatePgDict(table, Dict, Filter):
         print(e)
         exit()
 
-#create record in mimic database
+#create record in postgres database
 def insertPgDict(table, Dict):
     pg_cur = pg_conn.cursor()
     placeholder = ", ".join(["%s"] * len(Dict))
@@ -269,7 +285,7 @@ def putDict(endpoint, table, Dict):
 #load not-yet-imported admissions records for imported patients
 def getAdmissions(limit):
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime,deltadate.offset from admissions a left join (select uuid patient_uuid,patients.* from patients left join uuids on patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'admissions')"
+    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime,deltadate.offset from mimic.admissions a left join (select uuid patient_uuid,patients.* from mimic.patients left join uuids on mimic.patients.row_id = uuids.row_id where uuids.src = 'mimic.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimic.admissions')"
     if (limit):
         stmt += " limit " + limit
     try:
@@ -402,7 +418,9 @@ def addnumChart(admission,chart,parent_uuid):
 
 
 def addLab(admission,lab,encounter_uuid):
-    concept_uuid = labitems_array[lab.itemid]
+  print(lab)
+  try:
+    concept_uuid = concepts_array['test_num'][lab.itemid]
     if(lab.valuenum and lab.valueuom):
       observation = {
        "resourceType": "Observation",
@@ -462,7 +480,7 @@ def visittypestoVisitTypes():
 
 # post practitioners to openmrs fhir interface
 def caregiversToPractitioners(limit):
-    src = 'caregivers'
+    src = 'mimic.caregivers'
     concept_cur = getSrc(src, limit)
     for record in concept_cur:
         birthdate = randomDate("1900-01-01", "2000-01-01")
@@ -497,7 +515,7 @@ def caregiversToPractitioners(limit):
 
 # post patients to openmrs fhir interface
 def patientsToPatients(limit):
-    src = 'patients'
+    src = 'mimic.patients'
     patient_cur = getSrcDelta(src, limit)
     for record in patient_cur:
         gender = {"M": "male", "F": "female"}[record.gender]
@@ -807,7 +825,7 @@ def getlabItems():
 
 # insert unique diagnoses into openmrs concept table
 def chartitemsnumToConcepts():
-    src = 'd_items'
+    src = 'mimic.d_items'
     items = getchartItems_num()
     concept_cur = getSrc(src, None)
     for record in concept_cur:
@@ -862,7 +880,7 @@ def chartitemsnumToConcepts():
 
 # insert unique diagnoses into openmrs concept table
 def chartitemstxtToConcepts():
-    src = 'd_items'
+    src = 'mimic.d_items'
     items = getchartItems_txt()
     concept_cur = getSrc(src, None)
     for record in concept_cur:
@@ -905,7 +923,7 @@ def chartitemstxtToConcepts():
 
 # insert unique diagnoses into openmrs concept table
 def dlabitemsToConcepts():
-    src = 'd_labitems'
+    src = 'mimic.d_labitems'
     items = getlabItems()
     concept_cur = getSrc(src, None)
     for record in concept_cur:
@@ -1007,7 +1025,7 @@ def notecategoriesToConcepts():
 
 # insert unique diagnoses into openmrs concept table
 def ditemsToConcepts():
-    src = 'd_items'
+    src = 'mimic.d_items'
     concept_cur = getSrc(src, None)
     for record in concept_cur:
         if record.label == '' or record.label is None:
@@ -1061,10 +1079,6 @@ def conceptsToConcepts():
     src = 'concepts'
     concept_cur = getSrc(src, None)
     for record in concept_cur:
-        #if record.diagnosis == '' or record.diagnosis is None:
-        #    description = '[NO TEXT]'
-        #else:
-        #    description = record.diagnosis
         date = time.strftime('%Y-%m-%d %H:%M:%S')
         concept_uuid = str(uuid.uuid4())
         concept = {
@@ -1154,54 +1168,54 @@ def genConceptMap():
 # insert unique diagnoses into openmrs concept table
 
 # insert unique diagnoses into openmrs concept table
-def diagnosesToConcepts():
-    src = 'diagnoses'
-    concept_cur = getSrc(src, None)
-    for record in concept_cur:
-        if record.diagnosis == '' or record.diagnosis is None:
-            description = '[NO TEXT]'
-        else:
-            description = record.diagnosis
-        date = time.strftime('%Y-%m-%d %H:%M:%S')
-        concept_uuid = str(uuid.uuid4())
-        concept_id = insertDict(
-            'concept', {
-                "datatype_id": "4",
-                "date_created": date,
-                "class_id": "4",
-                "creator": "1",
-                "uuid": concept_uuid
-            })
-        insertDict(
-            'concept_name', {
-                "concept_id": concept_id,
-                "name": description,
-                "date_created": date,
-                "creator": "1",
-                "locale": "en",
-                "locale_preferred": "0",
-                "concept_name_type": "SHORT",
-                "uuid": str(uuid.uuid4())
-            })
-        insertDict(
-            'concept_description', {
-                "concept_id": concept_id,
-                "date_created": date,
-                "date_changed": date,
-                "locale": "en",
-                "creator": "1",
-                "changed_by": "1",
-                "description": description,
-                "uuid": str(uuid.uuid4())
-            })
-        uuid_cur = insertPgDict('uuids', {
-            'src': src,
-            'row_id': record.row_id,
-            'uuid': concept_uuid
-        })
-        uuid_cur.close()
-    concept_cur.close()
-    pg_conn.commit()
+#def diagnosesToConcepts():
+#    src = 'diagnoses'
+#    concept_cur = getSrc(src, None)
+#    for record in concept_cur:
+#        if record.diagnosis == '' or record.diagnosis is None:
+#            description = '[NO TEXT]'
+#        else:
+#            description = record.diagnosis
+#        date = time.strftime('%Y-%m-%d %H:%M:%S')
+#        concept_uuid = str(uuid.uuid4())
+#        concept_id = insertDict(
+#            'concept', {
+#                "datatype_id": "4",
+#                "date_created": date,
+#                "class_id": "4",
+#                "creator": "1",
+#                "uuid": concept_uuid
+#            })
+#        insertDict(
+#            'concept_name', {
+#                "concept_id": concept_id,
+#                "name": description,
+#                "date_created": date,
+#                "creator": "1",
+#                "locale": "en",
+#                "locale_preferred": "0",
+#                "concept_name_type": "SHORT",
+#                "uuid": str(uuid.uuid4())
+#            })
+#        insertDict(
+#            'concept_description', {
+#                "concept_id": concept_id,
+#                "date_created": date,
+#                "date_changed": date,
+#                "locale": "en",
+#                "creator": "1",
+#                "changed_by": "1",
+#                "description": description,
+#                "uuid": str(uuid.uuid4())
+#            })
+#        uuid_cur = insertPgDict('uuids', {
+#            'src': src,
+#            'row_id': record.row_id,
+#            'uuid': concept_uuid
+#        })
+#        uuid_cur.close()
+#    concept_cur.close()
+#    pg_conn.commit()
 
 
 # insert icd9 diagnosis codes into openmrs concept table
@@ -1289,20 +1303,22 @@ def initRestResources():
 
 def initPatients():
     patientsToPatients('1')
-    initAdmit()
+#    initAdmit()
 
 
 def initAdmit():
     global location_array
     global caregiver_array
-    global labitems_array
-    global ditems_array
-    global notecategory_array
-    notecategory_array = getNoteCategories()
+    global concepts_array
+#    global labitems_array
+#    global ditems_array
+#    global notecategory_array
+#    notecategory_array = getNoteCategories()
     location_array = getLocations()
     caregiver_array = getCaregivers()
-    labitems_array = getdLabItems()
-    ditems_array = getdItems()
+#    labitems_array = getdLabItems()
+#    ditems_array = getdItems()
+    concepts_array = getConcepts()
     admissionsToEncounters(None)
 
 
