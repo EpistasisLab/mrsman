@@ -14,11 +14,55 @@ from metadata import *
 from requests.auth import HTTPBasicAuth
 import xml.etree.ElementTree
 import sys
+import math
 from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
-baseuri = "http://localhost:8084/openmrs/ws"
+baseuri = "http://localhost:8080/openmrs/ws"
 sister = 'kate'
+
+
+def luhnmod30(id_without_check):
+    mod = 30
+    # allowable characters within identifier
+    valid_chars = '0123456789ACDEFGHJKLMNPRTUVWXY'
+    # remove leading or trailing whitespace, convert to uppercase
+    id_without_checkdigit = id_without_check.strip().upper()
+    # this will be a running total
+    sum = 0
+    # loop through digits from right to left
+    for n, char in enumerate(reversed(id_without_checkdigit)):
+        if not valid_chars.count(char):
+            raise Exception('InvalidIDException')
+        # our "digit" is calculated using ASCII value - 48
+        digit = valid_chars.find(char)
+        digit = ord(char) - 48
+        # weight will be the current digit's contribution to
+        # the running total
+        weight = None
+        if (n % 2 == 0):
+            # for alternating digits starting with the rightmost, we
+            # use our formula this is the same as multiplying x 2 and
+            # adding digits together for values 0 to 9.  Using the
+            # following formula allows us to gracefully calculate a
+            # weight for non-numeric "digits" as well (from their
+            # ASCII value - 48).
+            weight = (2 * digit)
+        else:
+            # even-positioned digits just contribute their ascii
+            # value minus 48
+            weight = digit
+        # keep a running total of weights
+        sum += weight
+    # avoid sum less than 10 (if characters below "0" allowed,
+    # this could happen)
+    sum = math.fabs(sum) + mod
+    # check digit is amount needed to reach next number
+    # divisible by ten. Return an integer
+    checkdigit =  int((mod - (sum % mod)) % mod)
+    #if(as_txt):
+    #    checkdigit = valid_chars[checkdigit]
+    return  valid_chars[checkdigit]
 
 
 # UTILITY
@@ -497,11 +541,11 @@ def caregiversToPractitioners(limit):
             'fhir',
             'practitioner', {
                 "resourceType": "Practitioner",
-                "name": {
+                "name": [{
                     "family": names.get_last_name(),
                     "given": [names.get_first_name(gender=gender)],
                     "suffix": [record.label]
-                },
+                }],
                 "gender": gender,
                 "birthDate": birthdate,
                 "active": True
@@ -528,16 +572,23 @@ def patientsToPatients(limit):
     for record in patient_cur:
         gender = {"M": "male", "F": "female"}[record.gender]
         deceasedBoolean = {1: True, 0: False}[record.expire_flag]
-        OpenMRSID = str(record.subject_id) + '-' + str(
+        OpenMRSIDnumber = str(record.subject_id) + '-' + str(
             generate(str(record.subject_id)))
+        OpenMRSID = str(record.subject_id) + str(
+            luhnmod30(str(record.subject_id)))
         patient = {
             "resourceType":
             "Patient",
             "identifier": [{
-                "use": "usual",
                 "system": "OpenMRS Identification Number",
+                "use": "secondary",
+                "value": OpenMRSIDnumber
+            },{
+                "use": "usual",
+                "system": "OpenMRS ID",
                 "value": OpenMRSID
-            }],
+            }
+            ],
             "name": [{
                 "use": "usual",
                 "family": names.get_last_name(),
@@ -552,6 +603,7 @@ def patientsToPatients(limit):
             "active":
             True
         }
+        print(patient)
         uuid = postDict('fhir', 'patient', patient)
         uuid_cur = insertPgDict('uuids', {
             'src': src,
@@ -1298,25 +1350,31 @@ def initDb():
     print("initializing database")
     loadPgsqlFile('../mimic/sql/add_tables.sql')
 
+#direct database record creation
 def initConcepts():
     print("import concepts")
     conceptsToConcepts()
     print("link mapped concepts")
     genConceptMap()
 
-#initialize
+#rest based record creation
 def initRestResources():
     locationsToLocations()
     postEncounterTypes()
     postVisitTypes()
+
+#fhir
+def initCaregivers():
     caregiversToPractitioners(None)
 
 
+#fhir
 def initPatients():
-    patientsToPatients('1')
+    patientsToPatients(None)
 #    initAdmit()
 
 
+#fhir
 def initAdmit():
     global location_array
     global caregiver_array
