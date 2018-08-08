@@ -66,10 +66,13 @@ CREATE TABLE concepts
   openmrs_id integer,
   shortname character varying(255),
   longname character varying(255),
+  description character varying(255),
+  icd9_code character varying(10),
   linksto character varying(50),
   concept_type character varying(50),
   concept_class_id integer,
   concept_datatype_id integer,
+  num_records integer default 0,
   min_val double precision,
   avg_val double precision,
   max_val double precision,
@@ -120,8 +123,17 @@ insert into concepts (shortname,longname,concept_type) (select category,concat(c
 update concepts set min_val = cenum.min_val, max_val = cenum.max_val, avg_val = cenum.avg_val, units = cenum.units from cenum where  concepts.itemid = cenum.itemid and concepts.concept_type = 'test_num';
 update concepts set min_val = lenum.min_val, max_val = lenum.max_val, avg_val = lenum.avg_val, units = lenum.units from lenum where  concepts.itemid = lenum.itemid and concepts.concept_type = 'test_num';
 
+--add icd_diagnoses dictionary
+insert into concepts (icd9_code,shortname,longname,description,concept_type) select icd9_code,short_title,concat(short_title,' [icd_diagnosis_',icd9_code,']'),long_title,'icd_diagnosis' from mimiciii.d_icd_diagnoses;
+
+--add icd_procedures dictionary
+insert into concepts (icd9_code,shortname,longname,description,concept_type) select icd9_code,short_title,concat(short_title,' [icd_procedure_',icd9_code,']'),long_title,'icd_procedure' from mimiciii.d_icd_procedures;
+
+-- set class and datatype for concepts
 update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';
 update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'diagnosis';
+update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'icd_diagnosis';
+update concepts set concept_class_id = 2,  concept_datatype_id = 4 where concept_type  = 'icd_procedure';
 update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_type  = 'category';
 update concepts set concept_class_id = 1, concept_datatype_id = 1 where concept_type  = 'test_num';
 update concepts set concept_class_id = 1, concept_datatype_id = 2 where concept_type  = 'test_enum';
@@ -131,12 +143,31 @@ update concepts set concept_class_id = 1, concept_datatype_id = 3 where concept_
 update concepts set min_val = cenum.min_val, max_val = cenum.max_val, avg_val = cenum.avg_val, units = cenum.units from cenum where  concepts.itemid = cenum.itemid and concepts.concept_type = 'test_num';
 update concepts set min_val = lenum.min_val, max_val = lenum.max_val, avg_val = lenum.avg_val, units = lenum.units from lenum where  concepts.itemid = lenum.itemid and concepts.concept_type = 'test_num';
 
+-- set class and datatype for concepts
+update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';
+update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'diagnosis';
+update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'icd_diagnosis';
+update concepts set concept_class_id = 2,  concept_datatype_id = 4 where concept_type  = 'icd_procedure';
+update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_type  = 'category';
+update concepts set concept_class_id = 1, concept_datatype_id = 1 where concept_type  = 'test_num';
+update concepts set concept_class_id = 1, concept_datatype_id = 2 where concept_type  = 'test_enum';
+update concepts set concept_class_id = 1, concept_datatype_id = 3 where concept_type  = 'test_text';
+
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.outputevents group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.procedureevents_mv group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.inputevents_cv group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.inputevents_mv group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.chartevents where valuenum is not null group by itemid) counts where concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.chartevents where value is not null group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_text';
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.labevents where valuenum is not null group by itemid) counts where concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
+update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.labevents where value is not null group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_text';
+ update concepts set num_records = num_records + num from  (select icd9_code,count(*) num from mimiciii.diagnoses_icd group by icd9_code) counts where  concepts.icd9_code = counts.icd9_code and concepts.concept_type = 'icd_diagnosis';
+
+
 -- cleanup
 delete from concepts where shortname is null;
---delete from concepts where concept_type = 'test_num' and avg_val is null;
---delete from concepts where concept_type = 'test_text' and linksto = 'chartevents' and itemid not in (select distinct(itemid) from chartevents where value ~ '[a-zA-Z]');
---delete from concepts where concept_type = 'test_text' and linksto = 'labevents' and itemid not in (select distinct(itemid) from labevents where value ~ '[a-zA-Z]');
---delete from concepts where linksto in ('inputevents_cv','outputevents','datetimeevents','procedureevents_mv','inputevents_mv','microbiologyevents');
--- remove unneeded enum concepts
---delete from concepts where linksto = 'chartevents' and concept_type = 'test_enum' and itemid not in (select itemid from cetxt_map);
-
+delete from concepts where concept_type = 'test_num' and num_records = 0;
+delete from concepts where concept_type = 'test_text' and num_records = 0;
+delete from concepts where concept_type = 'icd_diagnosis' and num_records = 0;
+delete from concepts where concept_type = 'test_enum' and itemid not in (select itemid from cetxt_map);
+--delete from concepts where concept_type = 'test_enum';
