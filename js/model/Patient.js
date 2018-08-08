@@ -26,6 +26,7 @@ PatientModel.prototype.sync = function() {
     var patient = this;
     //iterate over child-objects 
     for (key in patient) {
+        console.log(key)
         if (typeof(patient[key]) === 'object') {
             var obj = patient[key]
             for (var i in obj) {

@@ -26,9 +26,13 @@ function readResource(resource) {
         fs.readFile(config.json_files[resource], 'utf8', function(err, data) {
             if (err) throw err;
             var obj = JSON.parse(data);
-            for (var i in obj.entry) {
-                var record = obj.entry[i].resource;
-                return_list.push(record);
+            if(obj.entry) {
+                for (var i in obj.entry) {
+                    var record = obj.entry[i].resource;
+                    return_list.push(record);
+                }
+            } else {
+                return_list  = obj;
             }
             deferred.resolve(return_list);
         });
