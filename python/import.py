@@ -15,15 +15,27 @@ from requests.auth import HTTPBasicAuth
 import xml.etree.ElementTree
 import sys
 import math
+import os
 from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 baseuri = "http://localhost:8084/openmrs/ws"
 sister = 'kate'
 use_omrsnum = False
+json_path = '/share/devel/mrsman/data/json'
 
 # UTILITY
 #
+#write dictionary to a file
+def save_json(model_type,uuid,data):
+    directory = json_path + '/' + model_type
+    filename = directory + '/' + uuid + '.json'
+    if not os.path.exists(directory):
+        os.makedirs(directory) 
+    with open(filename, 'w') as outfile:
+        print('writing ' + filename)
+        json.dump(data, outfile)
+
 # choose a random date from a range
 def randomDate(start, end):
     date_format = '%Y-%m-%d'
@@ -201,17 +213,20 @@ def getSrcFilter(table, Dict):
 #create record in openmrs database
 def insertDict(table, Dict):
     placeholder = ", ".join(["%s"] * len(Dict))
+    mysql_cur = mysql_conn.cursor()
     stmt = "insert into `{table}` ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
     try:
         mysql_cur.execute(stmt, list(Dict.values()))
         rowid = mysql_cur.lastrowid
+        mysql_cur.close()
         return rowid
     except Exception as e:
         print("can't insert into  " + table)
         print(e)
         print('failed record')
         print(Dict)
+        mysql_cur.close()
         exit()
 
 #create record in mimic database
@@ -271,11 +286,14 @@ def postDict(endpoint, table, Dict):
         print('response:')
         print(r)
     if ("Location" in r.headers):
-        return (r.headers['Location'].split('/').pop())
+        uuid = r.headers['Location'].split('/').pop()
+        #save_json(table,uuid,Dict)
+        return (uuid)
     else:
         response = json.loads(r.text)
         if ('uuid' in response):
             uuid = response['uuid']
+            #save_json(table,uuid,Dict)
             return(uuid)
         else:
             print("Unexpected response:")
@@ -570,18 +588,18 @@ def patientsToPatients(limit):
             "active":
             True
         }
-
-
-
         print(patient)
         uuid = postDict('fhir', 'patient', patient)
-        uuid_cur = insertPgDict('uuids', {
-            'src': src,
-            'row_id': record.row_id,
-            'uuid': uuid
-        })
-        print("added patient: " + uuid)
-        print(patient)
+        if(uuid):
+            print("added patient: " + uuid)
+            #save_json('Patient',uuid,patient)
+            uuid_cur = insertPgDict('uuids', {
+                'src': src,
+                'row_id': record.row_id,
+                'uuid': uuid
+            })
+        else:
+            print("no uuid for " + src + " row_id: " + str(record.row_id)) 
         pg_conn.commit()
         uuid_cur.close()
     patient_cur.close()
@@ -662,6 +680,7 @@ def admissionsToEncounters(limit):
             }
         }
         admission_uuid = postDict('fhir', 'encounter', admission)
+        #save_json('Encounter',admission_uuid,admission)
         if (admission_uuid == False):
             return(False)
         for icustay in admission_data['icustays']:
@@ -1026,7 +1045,6 @@ if (len(sys.argv) > 1):
     try:
         mysql_conn = pymysql.connect(
             host='127.0.0.1', user='root', passwd='password', db=sister)
-        mysql_cur = mysql_conn.cursor()
     except:
         print("unable to connect to the mysql database")
         exit()
