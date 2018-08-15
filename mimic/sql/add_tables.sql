@@ -143,16 +143,6 @@ update concepts set concept_class_id = 1, concept_datatype_id = 3 where concept_
 update concepts set min_val = cenum.min_val, max_val = cenum.max_val, avg_val = cenum.avg_val, units = cenum.units from cenum where  concepts.itemid = cenum.itemid and concepts.concept_type = 'test_num';
 update concepts set min_val = lenum.min_val, max_val = lenum.max_val, avg_val = lenum.avg_val, units = lenum.units from lenum where  concepts.itemid = lenum.itemid and concepts.concept_type = 'test_num';
 
--- set class and datatype for concepts
-update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';
-update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'diagnosis';
-update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'icd_diagnosis';
-update concepts set concept_class_id = 2,  concept_datatype_id = 4 where concept_type  = 'icd_procedure';
-update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_type  = 'category';
-update concepts set concept_class_id = 1, concept_datatype_id = 1 where concept_type  = 'test_num';
-update concepts set concept_class_id = 1, concept_datatype_id = 2 where concept_type  = 'test_enum';
-update concepts set concept_class_id = 1, concept_datatype_id = 3 where concept_type  = 'test_text';
-
 update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.outputevents group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
 update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.procedureevents_mv group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
 update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.inputevents_cv group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_num';
