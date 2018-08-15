@@ -732,9 +732,9 @@ def admissionsToEncounters(limit):
             }
             icuenc_uuid = postDict('fhir', 'encounter', icuenc)
             stay_array[icustay.icustay_id] = icuenc_uuid
-    #    for events_source in admission_data['events']:
-    #         for event in admission_data['events'][events_source]:
-    #             addObs(events_source,event,record,admission_uuid,stay_array)
+        for events_source in admission_data['events']:
+             for event in admission_data['events'][events_source]:
+                 addObs(events_source,event,record,admission_uuid,stay_array)
         addDiagnosis(record,admission_uuid)
     admissions_cur.close()
     pg_conn.commit()
@@ -746,7 +746,7 @@ def addDiagnosis(admission,encounter_uuid):
         "code": {
             "coding": [{
                 "system": "http://openmrs.org",
-                "code": "1284AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                "code": "161602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
              }]
         },
         "subject": {
@@ -756,12 +756,7 @@ def addDiagnosis(admission,encounter_uuid):
             "reference": "Encounter/" + encounter_uuid,
         },
         "effectiveDateTime":  deltaDate(admission.admittime, admission.offset),
-        "valueCodeableConcept": {
-            "coding": [{
-                "system": "http://openmrs.org",
-                "code": diagnosis_uuid
-             }]
-        }
+        "valueString": admission.diagnosis
         
     }
     observation_uuid = postDict('fhir', 'observation', observation)
