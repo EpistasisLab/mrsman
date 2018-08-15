@@ -1,4 +1,4 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+--CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 DROP TABLE if exists uuids;
 CREATE TABLE uuids
 (
@@ -131,8 +131,8 @@ insert into concepts (icd9_code,shortname,longname,description,concept_type) sel
 
 -- set class and datatype for concepts
 update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';
-update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'diagnosis';
-update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'icd_diagnosis';
+update concepts set concept_class_id = 4,  concept_datatype_id = 2 where concept_type  = 'diagnosis';
+update concepts set concept_class_id = 4,  concept_datatype_id = 2 where concept_type  = 'icd_diagnosis';
 update concepts set concept_class_id = 2,  concept_datatype_id = 4 where concept_type  = 'icd_procedure';
 update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_type  = 'category';
 update concepts set concept_class_id = 1, concept_datatype_id = 1 where concept_type  = 'test_num';

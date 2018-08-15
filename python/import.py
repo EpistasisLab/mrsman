@@ -22,7 +22,7 @@ debug = False
 baseuri = "http://localhost:8084/openmrs/ws"
 sister = 'kate'
 use_omrsnum = False
-json_path = '/share/devel/mrsman/data/json'
+json_path = '/data/devel/mrsman/data/json'
 
 # UTILITY
 #
@@ -33,7 +33,7 @@ def save_json(model_type,uuid,data):
     if not os.path.exists(directory):
         os.makedirs(directory) 
     with open(filename, 'w') as outfile:
-        print('writing ' + filename)
+        #print('writing ' + filename)
         json.dump(data, outfile)
 
 # choose a random date from a range
@@ -229,6 +229,20 @@ def insertDict(table, Dict):
         mysql_cur.close()
         exit()
 
+#set concepts auto_increment value
+def setIncrementer(table,value):
+    mysql_cur = mysql_conn.cursor()
+    stmt = "ALTER TABLE "+table+" AUTO_INCREMENT = " + value
+    try:
+        mysql_cur.execute(stmt)
+        mysql_cur.close()
+        return True
+    except Exception as e:
+        print("can't set auto_increment")
+        return False
+        mysql_cur.close()
+        exit()
+
 #create record in mimic database
 def updatePgDict(table, Dict, Filter):
     pg_cur = openPgCursor()
@@ -298,6 +312,8 @@ def postDict(endpoint, table, Dict):
         else:
             print("Unexpected response:")
             print(r.text)
+            print("Dict:")
+            print(Dict)
         return(False)
 
 #post a json encoded record to the fhir/rest interface
@@ -320,7 +336,7 @@ def putDict(endpoint, table, Dict):
 def getAdmissions(limit):
     pg_cur = openPgCursor()
     #pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,edregtime,edouttime,deltadate.offset from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'mimiciii.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimiciii.admissions')"
+    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,diagnosis,edregtime,edouttime,deltadate.offset from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'mimiciii.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimiciii.admissions')"
     if (limit):
         stmt += " limit " + limit
     try:
@@ -716,11 +732,40 @@ def admissionsToEncounters(limit):
             }
             icuenc_uuid = postDict('fhir', 'encounter', icuenc)
             stay_array[icustay.icustay_id] = icuenc_uuid
-        for events_source in admission_data['events']:
-             for event in admission_data['events'][events_source]:
-                 addObs(events_source,event,record,admission_uuid,stay_array)
+    #    for events_source in admission_data['events']:
+    #         for event in admission_data['events'][events_source]:
+    #             addObs(events_source,event,record,admission_uuid,stay_array)
+        addDiagnosis(record,admission_uuid)
     admissions_cur.close()
     pg_conn.commit()
+
+def addDiagnosis(admission,encounter_uuid):
+    diagnosis_uuid = concepts_array['diagnosis'][admission.diagnosis]
+    observation = {
+        "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                "system": "http://openmrs.org",
+                "code": "1284AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+             }]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "context": {
+            "reference": "Encounter/" + encounter_uuid,
+        },
+        "effectiveDateTime":  deltaDate(admission.admittime, admission.offset),
+        "valueCodeableConcept": {
+            "coding": [{
+                "system": "http://openmrs.org",
+                "code": diagnosis_uuid
+             }]
+        }
+        
+    }
+    observation_uuid = postDict('fhir', 'observation', observation)
+    return(observation_uuid)
 
 def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
     value = False
@@ -787,7 +832,7 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
             pass
     try:
         if(obs.icustay_id):
-            encounter_uuid = stay_array[icustay_id]
+            encounter_uuid = stay_array[obs.icustay_id]
     except Exception:
         pass
 
@@ -814,7 +859,7 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
             observation["issued"] =  deltaDate(date, admission.offset);
         if(value_type == 'numeric'):
             observation["valueQuantity"] =  {
-               "value": value,
+               "value": str(value),
                "unit": units ,
                "system": "http://unitsofmeasure.org",
             }
@@ -897,6 +942,10 @@ def postVisitTypes():
 # insert concepts into openmrs concepts and related tables
 def conceptsToConcepts():
     src = 'concepts'
+    #change the auto_increment value so we don't step on built-in concepts
+    setIncrementer('concept','166000')
+    setIncrementer('concept_name','166000')
+    setIncrementer('concept_description','166000')
     concept_cur = getSrc(src, None)
     for record in concept_cur:
         date = time.strftime('%Y-%m-%d %H:%M:%S')
@@ -957,6 +1006,12 @@ def conceptsToConcepts():
             if record.units:
                 numeric["units"]=record.units
             insertDict('concept_numeric',numeric)
+        elif record.concept_type == 'test_num':
+            numeric={
+                    "concept_id": concept_id,
+                    "precise": "1",
+                }
+            insertDict('concept_numeric',numeric)
         uuid_cur = insertPgDict('uuids', {
             'src': src,
             'row_id': record.row_id,
@@ -970,6 +1025,9 @@ def conceptsToConcepts():
         })
         update_cur.close()
     concept_cur.close()
+    setIncrementer('concept','3')
+    setIncrementer('concept_name','21')
+    setIncrementer('concept_description','1')
     pg_conn.commit()
 
 # link enumerated concepts to their parent concepts
@@ -995,9 +1053,6 @@ def genConceptMap():
 def initDb():
     print("initializing database")
     loadPgsqlFile('../mimic/sql/add_tables.sql')
-
-#direct database record creation
-def initConcepts():
     print("import concepts")
     conceptsToConcepts()
     print("link mapped concepts")
