@@ -1073,19 +1073,32 @@ def initCaregivers():
 
 #fhir
 def initPatients():
+    getUuids()
+    try:
+        num = int(eval(sys.argv[2]))
+    except:
+        num = 1
+    for x in range(0, num):
+        patientsToPatients('1')
+        admissionsToEncounters(None)
+
+#fhir
+def initPatient():
     patientsToPatients('1')
-    initAdmit()
 
 #fhir
 def initAdmit():
+    getUuids()
+    admissionsToEncounters(None)
+
+#fhir
+def getUuids():
     global location_array
     global caregiver_array
     global concepts_array
     location_array = getLocations()
     caregiver_array = getCaregivers()
     concepts_array = getConcepts()
-    admissionsToEncounters(None)
-
 #
 #MAIN
 #
