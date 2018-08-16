@@ -90,10 +90,10 @@ def luhnmod30(id_without_check):
 def deltaDate(src_date, offset):
     return str((src_date + relativedelta(days=-offset)).isoformat())
 
-#open a postgres cursor with search_path set to sister name
+#open a postgres cursor set to sister name
 def openPgCursor():
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    pg_cur.execute("SET search_path TO " + config['SISTER'])
+#    pg_cur.execute("SET search_path TO " + config['SISTER'])
     return(pg_cur)
 
 # DATA I/O
@@ -255,9 +255,8 @@ def setIncrementer(table,value):
 #create record in mimic database
 def updatePgDict(table, Dict, Filter):
     pg_cur = openPgCursor()
-    #pg_cur = pg_conn.cursor()
     placeholder = ", ".join(["%s"] * len(Dict))
-    stmt = "update {table} set ({columns}) = ({values})".format(
+    stmt = "update {table} set ({columns}) = ROW({values})".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
     for col_name in Filter:
         stmt += " where " + col_name + " = '" + str(Filter[col_name]) + "'"
@@ -265,7 +264,7 @@ def updatePgDict(table, Dict, Filter):
         pg_cur.execute(stmt, list(Dict.values()))
         return pg_cur
     except Exception as e:
-        print("can't insert into  " + table)
+        print("can't update " + table)
         print(e)
         exit()
 
@@ -290,6 +289,7 @@ def loadPgsqlFile(filename):
     #pg_cur = pg_conn.cursor()
     try:
         pg_cur.execute(open(filename, "r").read())
+        pg_conn.commit()
         return pg_cur
     except Exception as e:
         print("can't load file")
@@ -1056,6 +1056,8 @@ def genConceptMap():
 def initDb():
     print("initializing database")
     loadPgsqlFile('../mimic/sql/add_tables.sql')
+
+def initConcepts():
     print("import concepts")
     conceptsToConcepts()
     print("link mapped concepts")
