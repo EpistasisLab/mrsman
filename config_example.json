@@ -1,0 +1,11 @@
+{
+    "global": {
+        "IP": "172.16.255.x",
+        "OPENMRS_PORT":"8084",
+        "MYSQL_USER":"root",
+        "MYSQL_PASS":"changeme",
+        "PGSQL_USER":"postgres",
+        "PGSQL_PASS":"postgres",
+        "SISTER":"kate"
+    }
+}

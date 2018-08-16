@@ -19,15 +19,13 @@ import os
 from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
-baseuri = "http://localhost:8084/openmrs/ws"
-sister = 'kate'
 use_omrsnum = False
-json_path = '/data/devel/mrsman/data/json'
 
 # UTILITY
 #
 #write dictionary to a file
 def save_json(model_type,uuid,data):
+    json_path = '/data/devel/mrsman/data/json'
     directory = json_path + '/' + model_type
     filename = directory + '/' + uuid + '.json'
     if not os.path.exists(directory):
@@ -35,6 +33,17 @@ def save_json(model_type,uuid,data):
     with open(filename, 'w') as outfile:
         #print('writing ' + filename)
         json.dump(data, outfile)
+
+def read_config():
+    parent_dir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
+    with open(parent_dir + '/config.json') as f:
+        global config
+        data = json.load(f)
+        config = data['global']
+        config['baseuri'] = 'http://' + config['IP'] + ':' +  config['OPENMRS_PORT'] + '/openmrs/ws'
+        print(config['baseuri'])
+
+# choose a random date from a range
 
 # choose a random date from a range
 def randomDate(start, end):
@@ -84,7 +93,7 @@ def deltaDate(src_date, offset):
 #open a postgres cursor with search_path set to sister name
 def openPgCursor():
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    pg_cur.execute("SET search_path TO " + sister)
+    pg_cur.execute("SET search_path TO " + config['SISTER'])
     return(pg_cur)
 
 # DATA I/O
@@ -290,9 +299,9 @@ def loadPgsqlFile(filename):
 #post a json encoded record to the fhir/rest interface
 def postDict(endpoint, table, Dict):
     if (endpoint == 'fhir'):
-        uri = baseuri + "/fhir/" + table.capitalize()
+        uri = config['baseuri'] + "/fhir/" + table.capitalize()
     else:
-        uri = baseuri + "/rest/v1/" + table
+        uri = config['baseuri'] + "/rest/v1/" + table
     r = requests.post(uri, json=Dict, auth=HTTPBasicAuth('admin', 'Admin123'))
     if debug:
         print('post:')
@@ -321,9 +330,9 @@ def putDict(endpoint, table, Dict):
     new_uuid = str(uuid.uuid4())
     Dict['id'] = new_uuid;
     if (endpoint == 'fhir'):
-        uri = baseuri + "/fhir/" + table.capitalize() + "/" + new_uuid
+        uri = config['baseuri'] + "/fhir/" + table.capitalize() + "/" + new_uuid
     else:
-        uri = baseuri + "/rest/v1/" + table
+        uri = config['baseuri']  + "/rest/v1/" + table
     r = requests.put(uri, json=Dict, auth=HTTPBasicAuth('admin', 'Admin123'))
     if ("Location" in r.headers):
         return (r.headers['Location'].split('/').pop())
@@ -740,7 +749,6 @@ def admissionsToEncounters(limit):
     pg_conn.commit()
 
 def addDiagnosis(admission,encounter_uuid):
-    diagnosis_uuid = concepts_array['diagnosis'][admission.diagnosis]
     observation = {
         "resourceType": "Observation",
         "code": {
@@ -1083,9 +1091,10 @@ def initAdmit():
 #
 #connect to mimic dataset postgres
 if (len(sys.argv) > 1):
+    read_config()
     try:
         pg_conn = psycopg2.connect(
-            dbname='mimic', user='postgres', password='postgres')
+            dbname='mimic', user=config['PGSQL_USER'], password=config['PGSQL_PASS'])
     except Exception as e:
         print("unable to connect to the postgres databases")
         print(e)
@@ -1094,7 +1103,7 @@ if (len(sys.argv) > 1):
 #connect to openmrs mysql
     try:
         mysql_conn = pymysql.connect(
-            host='127.0.0.1', user='root', passwd='password', db=sister)
+            user=config['MYSQL_USER'], passwd=config['MYSQL_PASS'], db=config['SISTER'])
     except:
         print("unable to connect to the mysql database")
         exit()
