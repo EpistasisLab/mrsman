@@ -41,9 +41,7 @@ def read_config():
         data = json.load(f)
         config = data['global']
         config['baseuri'] = 'http://' + config['IP'] + ':' +  config['OPENMRS_PORT'] + '/openmrs/ws'
-        print(config['baseuri'])
 
-# choose a random date from a range
 
 # choose a random date from a range
 def randomDate(start, end):
@@ -302,7 +300,7 @@ def postDict(endpoint, table, Dict):
         uri = config['baseuri'] + "/fhir/" + table.capitalize()
     else:
         uri = config['baseuri'] + "/rest/v1/" + table
-    r = requests.post(uri, json=Dict, auth=HTTPBasicAuth('admin', 'Admin123'))
+    r = requests.post(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']))
     if debug:
         print('post:')
         print(Dict)
@@ -333,7 +331,7 @@ def putDict(endpoint, table, Dict):
         uri = config['baseuri'] + "/fhir/" + table.capitalize() + "/" + new_uuid
     else:
         uri = config['baseuri']  + "/rest/v1/" + table
-    r = requests.put(uri, json=Dict, auth=HTTPBasicAuth('admin', 'Admin123'))
+    r = requests.put(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']))
     if ("Location" in r.headers):
         return (r.headers['Location'].split('/').pop())
     else:
