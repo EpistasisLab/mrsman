@@ -33,6 +33,7 @@ def save_json(model_type,uuid,data):
     with open(filename, 'w') as outfile:
         json.dump(data, outfile)
 
+#read config file and initialize database connections
 def bootstrap():
     global pg_conn
     global mysql_conn
@@ -59,14 +60,12 @@ def bootstrap():
         exit()
     return(True)
 
-def commit():
+
+def shutdown():
     pg_conn.commit()
     mysql_conn.commit()
     pg_conn.close()
     mysql_conn.close()
-
-
-
 
 # choose a random date from a range
 def randomDate(start, end):
@@ -116,7 +115,6 @@ def deltaDate(src_date, offset):
 #open a postgres cursor set to sister name
 def openPgCursor():
     pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-#    pg_cur.execute("SET search_path TO " + config['SISTER'])
     return(pg_cur)
 
 # DATA I/O
@@ -266,6 +264,8 @@ def insertDict(table, Dict):
     stmt = "insert into `{table}` ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
     try:
+        if debug:
+            print(stmt)
         mysql_cur.execute(stmt, list(Dict.values()))
         rowid = mysql_cur.lastrowid
         mysql_cur.close()
@@ -306,6 +306,8 @@ def updatePgDict(table, Dict, Filter):
              fields.append(col_name + " = '" + str(Filter[col_name]) + "'")
         stmt += ' and ' .join(fields)
     try:
+        if debug:
+            print(stmt)
         pg_cur.execute(stmt, list(Dict.values()))
         return pg_cur
     except Exception as e:
@@ -314,8 +316,6 @@ def updatePgDict(table, Dict, Filter):
         print(Dict.values())
         print(e)
         exit()
-
-
 
 #create record in mimic database
 def deletePgDict(table, Filter):
@@ -344,6 +344,8 @@ def insertPgDict(table, Dict):
     stmt = "insert into {table} ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
     try:
+        if debug:
+            print(stmt)
         pg_cur.execute(stmt, list(Dict.values()))
         return pg_cur
     except Exception as e:
@@ -402,6 +404,8 @@ def putDict(endpoint, table, Dict):
     else:
         uri = config['baseuri']  + "/rest/v1/" + table
     r = requests.put(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']))
+    if debug:
+        print(Dict)
     if ("Location" in r.headers):
         return (r.headers['Location'].split('/').pop())
     else:
@@ -456,137 +460,6 @@ def getAdmissionData(admission):
             admission_data['events'][table].append(record)
 
     return (admission_data)
-
-def addNote(admission,note,parent_uuid):
-    concept_uuid = notecategory_array[note.category]
-    observation = {
-       "resourceType": "Observation",
-        "code": {
-            "coding": [{
-                # "display": "Text of encounter note"
-                "system": "http://openmrs.org",
-                "code": concept_uuid
-            }]
-        },
-        "subject": {
-            "id": admission.patient_uuid,
-        },
-        "effectiveDateTime": deltaDate(note.chartdate, admission.offset),
-        "issued": deltaDate(note.chartdate, admission.offset),
-        "valueString": note.text,
-            "context": {
-            "reference": "Encounter/" + parent_uuid,
-        }
-    }
-    if(note.cgid):
-        cg_uuid = caregiver_array[note.cgid];
-        performer = [
-             {
-              "reference": "Practitioner/"+cg_uuid,
-             }
-        ]
-        observation['performer'] = performer;
-    observation_uuid = postDict('fhir', 'observation', observation)
-    return(observation_uuid)
-
-def addtxtChart(admission,chart,parent_uuid):
-    concept_uuid = ditems_array[chart.itemid]
-    observation = {
-       "resourceType": "Observation",
-        "code": {
-            "coding": [{
-                # "display": "Text of encounter note"
-                "system": "http://openmrs.org",
-                "code": concept_uuid
-            }]
-        },
-        "subject": {
-            "id": admission.patient_uuid,
-        },
-        "effectiveDateTime": deltaDate(chart.charttime, admission.offset),
-        "issued": deltaDate(chart.charttime, admission.offset),
-        "value": chart.value,
-            "context": {
-            "reference": "Encounter/" + parent_uuid,
-        }
-    }
-    if(chart.cgid):
-        cg_uuid = caregiver_array[chart.cgid];
-        performer = [
-             {
-              "reference": "Practitioner/"+cg_uuid,
-             }
-        ]
-        observation['performer'] = performer;
-    observation_uuid = postDict('fhir', 'observation', observation)
-    return(observation_uuid)
-
-def addnumChart(admission,chart,parent_uuid):
-    concept_uuid = ditems_array[chart.itemid]
-    observation = {
-       "resourceType": "Observation",
-        "code": {
-            "coding": [{
-                # "display": "Text of encounter note"
-                "system": "http://openmrs.org",
-                "code": concept_uuid
-            }]
-        },
-        "subject": {
-            "id": admission.patient_uuid,
-        },
-        "effectiveDateTime": deltaDate(chart.charttime, admission.offset),
-        "issued": deltaDate(chart.charttime, admission.offset),
-        "valueQuantity": {
-            "value": chart.valuenum,
-            "unit": chart.valueuom,
-            "system": "http://unitsofmeasure.org",
-        },
-            "context": {
-            "reference": "Encounter/" + parent_uuid,
-        }
-    }
-    if(chart.cgid):
-        cg_uuid = caregiver_array[chart.cgid];
-        performer = [
-             {
-              "reference": "Practitioner/"+cg_uuid,
-             }
-        ]
-        observation['performer'] = performer;
-    observation_uuid = postDict('fhir', 'observation', observation)
-    return(observation_uuid)
-
-
-def addLab(admission,lab,encounter_uuid):
-    concept_uuid = concepts_array['test_num'][lab.itemid]
-    if(lab.valuenum and lab.valueuom):
-      observation = {
-       "resourceType": "Observation",
-        "code": {
-            "coding": [{
-                "system": "http://openmrs.org",
-                "code": concept_uuid
-            }]
-        },
-        "subject": {
-            "id": admission.patient_uuid,
-        },
-        "effectiveDateTime": deltaDate(lab.charttime, admission.offset),
-        "issued": deltaDate(lab.charttime, admission.offset),
-        "valueQuantity": {
-            "value": lab.valuenum,
-            "unit": lab.valueuom,
-            "system": "http://unitsofmeasure.org",
-        },
-            "context": {
-            "reference": "Encounter/" + encounter_uuid,
-        }
-    }
-      observation_uuid = postDict('fhir', 'observation', observation)
-      return(observation_uuid)
-    else:
-      return False
 
 #MODEL MANIPULATION
 #
@@ -648,21 +521,21 @@ def caregiversToPractitioners(limit):
             exit()
     concept_cur.close()
 
-# post patients to openmrs fhir interface
-def reinitPatient(subject_id):
+# delete then load a patient to openmrs fhir interface
+def reloadPatient(subject_id):
     src = 'mimiciii.patients'
-    Dict = {}
-    Dict['subject_id'] = subject_id;
-    patient_cur = getSrcDeltaUuid('mimiciii.patients', Dict)
-#    getUuids()
-#    patient_cur = getSrcDeltaUuid('patients', Dict)
+    #get patient from postgres
+    patient_cur = getSrcDeltaUuid('mimiciii.patients', {'subject_id':subject_id})
     for record in patient_cur:
         if(record.uuid):
+            #remove old uuid
             delDict('fhir','patient', record.uuid)
+        #create a new fhir patient and save the new uuid
         uuid=addPatient(record)
         if(uuid):
            print("added patient: " + uuid)
            #save_json('Patient',uuid,patient)
+           #update uuids table
            uuid_cur = updatePgDict('uuids', {
                'src': src,
                'row_id': record.row_id,
@@ -673,6 +546,7 @@ def reinitPatient(subject_id):
            uuid_cur.close()
         else:
             print("no uuid for " + src + " row_id: " + str(record.row_id)) 
+    #delete admissions from uuids table
     admit_cur = getSrcFilter('mimiciii.admissions',{
         'subject_id':subject_id
     })
@@ -682,10 +556,8 @@ def reinitPatient(subject_id):
             'src':'mimiciii.admissions',
             'row_id':record.row_id
         })
-    admissionsToEncounters(None)
     pg_conn.commit()
     patient_cur.close()
-
 
 # post patients to openmrs fhir interface
 def patientsToPatients(limit):
@@ -744,11 +616,11 @@ def addPatient(record):
         "active":
         True
     }
-    print(patient)
+    if(debug):
+        print(patient)
     uuid = postDict('fhir', 'patient', patient)
     pg_conn.commit()
     return(uuid)
-
 
 # post admissions to openmrs fhir encounters interface
 def admissionsToEncounters(limit):
@@ -767,7 +639,6 @@ def admissionsToEncounters(limit):
             "finished",
             "type": [{
                 "coding": [{
-#                    "display": record.admission_type
                     "code": record.visit_type_code
                 }]
             }],
@@ -830,6 +701,11 @@ def admissionsToEncounters(limit):
         if (admission_uuid == False):
             return(False)
         for icustay in admission_data['icustays']:
+            if(icustay.outtime is None):
+                outtime = icustay.intime
+            else:
+                outtime = icustay.outtime
+            print(icustay)
             print("processing stay: " + str(icustay.icustay_id))
             icuenc = {
                 "resourceType": "Encounter",
@@ -837,7 +713,6 @@ def admissionsToEncounters(limit):
                 "type": [{
                     "coding": [{
                          "display": record.admission_type
-#                        "display": "icustay"
                     }]
                 }],
                 "subject": {
@@ -845,7 +720,7 @@ def admissionsToEncounters(limit):
                 },
                 "period": {
                     "start": deltaDate(icustay.intime, record.offset),
-                    "end": deltaDate(icustay.outtime, record.offset)
+                    "end": deltaDate(outtime, record.offset)
                 },
                 "location": [{
                     "location": {
@@ -853,7 +728,7 @@ def admissionsToEncounters(limit):
                     },
                     "period": {
                         "start": deltaDate(icustay.intime, record.offset),
-                        "end": deltaDate(icustay.outtime, record.offset)
+                        "end": deltaDate(outtime, record.offset)
                     }
                 }],
                 "partOf": {
@@ -866,6 +741,7 @@ def admissionsToEncounters(limit):
              for event in admission_data['events'][events_source]:
                  addObs(events_source,event,record,admission_uuid,stay_array)
         addDiagnosis(record,admission_uuid)
+        pg_conn.commit()
     admissions_cur.close()
     pg_conn.commit()
 
@@ -891,6 +767,7 @@ def addDiagnosis(admission,encounter_uuid):
     observation_uuid = postDict('fhir', 'observation', observation)
     return(observation_uuid)
 
+#create a fhir observation for a mimic event
 def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
     value = False
     units = False
@@ -937,7 +814,6 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
         value_type = 'text'
         concept_uuid = concepts_array['category'][obs.category]
         value = obs.text
-
     try:
         if(obs.charttime):
             date = obs.charttime
@@ -959,9 +835,6 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
             encounter_uuid = stay_array[obs.icustay_id]
     except Exception:
         pass
-
-  
-
     if(concept_uuid and value and value_type):
         observation = {
             "resourceType": "Observation",
@@ -995,7 +868,6 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
         print('skipping:')
         print([obs_type,concept_uuid,value_type,value,units,date,obs.row_id])
         return(None)
-
 
 # post locations to openmrs fhir interface
 def locationsToLocations():
@@ -1178,4 +1050,3 @@ def getUuids():
     location_array = getLocations()
     caregiver_array = getCaregivers()
     concepts_array = getConcepts()
-

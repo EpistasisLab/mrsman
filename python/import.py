@@ -40,10 +40,10 @@ def initAdmit():
     admissionsToEncounters(None)
 
 #fhir
-def reloadPatient():
+def reinitPatient():
     getUuids()
     subject_id = sys.argv[2]
-    reinitPatient(subject_id)
+    reloadPatient(subject_id)
 
 #MAIN
 #
@@ -54,7 +54,7 @@ if (len(sys.argv) > 1):
     #run function from cli
     a = eval(sys.argv[1])
     a()
-    commit()
+    shutdown()
 else:
     tmp = globals().copy()
     print("available arguments:")
