@@ -297,7 +297,7 @@ def updatePgDict(table, Dict, Filter):
     pg_cur = openPgCursor()
     placeholder = ", ".join(["%s"] * len(Dict))
     #stmt = "update {table} set ({columns}) = ROW({values})".format(
-    stmt = "update {table} set ({columns}) = ({values})".format(
+    stmt = "update {table} set {columns} = {values}".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
     if(Filter):
         stmt += " where "
