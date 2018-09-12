@@ -33,23 +33,21 @@ class myThread (threading.Thread):
    def run(self):
       bootstrap(self)
       print ("Starting %s: %s" % (self.name, time.ctime(time.time())))
-      run_task(self)
+      runTask(self)
       print ("Exiting %s: %s" % (self.name, time.ctime(time.time())))
       shutdown(self)
 
-def run_task(self):
-   taskname = self.taskName
-   threadName = self.name
-   counter  = self.count
+def runTask(self):
+   counter = self.count
    while counter:
       if exitFlag:
          return()
-      self.taskName(self)
+      addModuloRecords(self)
       print ("thread %s, iter %s" % (self.name, counter))
       counter -= 1
 
 
-def splitTask(num,taskName):
+def splitTask(num,src,adder):
     if(num < numThreads):
       ns = num
     else:
@@ -61,7 +59,8 @@ def splitTask(num,taskName):
       threads[x].ns = ns
       threads[x].x = x
       threads[x].count = count
-      threads[x].taskName = taskName
+      threads[x].src = src
+      threads[x].adder = adder
     for x in threads:
         thread = threads[x]
         thread.start()
@@ -70,23 +69,21 @@ def splitTask(num,taskName):
        thread.join()
 
 
-def returnModuloRecords(self,src):
-    mod = self.x
-    Dict = {"MOD("+src+".row_id,"+ str(numThreads) +")":str(mod)}
-    print('loading '+src+' mod: ' + str(mod));
-    cur = getSrcDelta(self,src, Dict, 1)
+def addModuloRecords(self):
+    adder = eval(self.adder)
+    cur = getSrcDelta(self)
     for record in cur:
-        uuid=self.addder(self,record)
+        uuid=adder(self,record)
         if(uuid):
-           print("added "+src+": " + uuid)
+           print("added "+self.src+": " + uuid)
            uuid_cur = insertPgDict(self,'uuids', {
-               'src': src,
+               'src': self.src,
                'row_id': record.row_id,
                'uuid': uuid
            })
            uuid_cur.close()
         else:
-            print("no uuid for " + src + " row_id: " + str(record.row_id)) 
+            print("no uuid for " + self.src + " row_id: " + str(record.row_id)) 
     cur.close()
     self.pg_conn.commit()
 
@@ -104,8 +101,6 @@ def save_json(model_type,uuid,data):
 
 #read config file and initialize database connections
 def bootstrap(self):
-    #global pg_conn
-    #global mysql_conn
     global config
     parent_dir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
     with open(parent_dir + '/config.json') as f:
@@ -181,7 +176,7 @@ def luhnmod30(id_without_check):
 def deltaDate(src_date, offset):
     return str((src_date + relativedelta(days=-offset)).isoformat())
 
-#open a postgres cursor set to sister name
+#open a postgres cursor 
 def openPgCursor(self):
     pg_cur = self.pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     return(pg_cur)
@@ -189,8 +184,8 @@ def openPgCursor(self):
 # DATA I/O
 #
 #load not-yet-imported mimic records
-def getSrc(table, limit):
-    pg_cur = openPgCursor()
+def getSrc(self, table, limit):
+    pg_cur = openPgCursor(self)
     stmt = "select * from " + table + " where row_id not in (select row_id from uuids where src = '" + table + "')"
     if (limit):
         stmt += " limit " + limit
@@ -203,20 +198,19 @@ def getSrc(table, limit):
         exit()
 
 #load not-yet-imported mimic records joined to deltadate
-def getSrcDelta(self, table, Dict, limit):
+def getSrcDelta(self):
+    Dict = False
+    if(self.x):
+      Dict = {"MOD("+self.src+".row_id,"+ str(numThreads) +")":str(self.x)}
     pg_cur = openPgCursor(self)
-    stmt = "select " + table + ".*,deltadate.offset from " + table + " left join deltadate on deltadate.subject_id = " + table + ".subject_id where row_id not in (select row_id from uuids where src = '" + table + "')"
+    stmt = "select " + self.src + ".*,deltadate.offset from " + self.src + " left join deltadate on deltadate.subject_id = " + self.src + ".subject_id where row_id not in (select row_id from uuids where src = '" + self.src + "')"
     if(Dict):
         stmt += " and "
         fields = []
         for col_name in Dict:
             fields.append(col_name + " = '" + str(Dict[col_name]) + "'")
         stmt += ' and ' .join(fields)
-    if (limit):
-        if(isinstance(limit,str)):
-            stmt += " limit " + limit
-        elif(isinstance(limit,int)):
-            stmt += " limit " + str(limit)
+    stmt += " limit 1"
     try:
         if debug:
             print(stmt)
@@ -224,13 +218,13 @@ def getSrcDelta(self, table, Dict, limit):
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
-        print("can't select from " + table)
+        print("can't select from " + self.src)
         print(e)
         exit()
 
 #load not-yet-imported mimic records joined to deltadate
-def getSrcDeltaUuid(table, Dict):
-    pg_cur = openPgCursor()
+def getSrcDeltaUuid(self, table, Dict):
+    pg_cur = openPgCursor(self)
     stmt = "select " + table + ".*,deltadate.offset,uuids.uuid from " + table + " left join deltadate on deltadate.subject_id = " + table + ".subject_id  left join uuids on " + table + ".row_id = uuids.row_id and uuids.src = '" + table + "'"
     if Dict:
         for col_name in Dict:
@@ -247,8 +241,8 @@ def getSrcDeltaUuid(table, Dict):
         exit()
 
 #load imported mimic records with filter
-def getSrcUuid(table, Dict):
-    pg_cur = openPgCursor()
+def getSrcUuid(self, table, Dict):
+    pg_cur = openPgCursor(self)
     stmt = "select " + table + ".*,uuids.uuid from " + table + " left join uuids on " + table + ".row_id = uuids.row_id and uuids.src = '" + table + "'"
     if Dict:
         for col_name in Dict:
@@ -265,8 +259,8 @@ def getSrcUuid(table, Dict):
         exit()
 
 #get enumerated concepts
-def getConceptMap():
-    pg_cur = openPgCursor()
+def getConceptMap(self):
+    pg_cur = openPgCursor(self)
     stmt = "select concepts.openmrs_id parent_id,cm.openmrs_id child_id from (select cetxt_map.itemid,concepts.openmrs_id from cetxt_map left join concepts on cetxt_map.value = concepts.shortname and concepts.concept_type = 'answer') cm left join concepts on cm.itemid = concepts.itemid and concepts.concept_type = 'test_enum'"
     try:
         pg_cur.execute(stmt)
@@ -277,24 +271,24 @@ def getConceptMap():
         exit()
 
 #load all locations into an array for easy searching
-def getLocations():
-    cur = getSrcUuid('locations', None)
+def getLocations(self):
+    cur = getSrcUuid(self, 'locations', None)
     locations = {}
     for location in cur:
         locations[location.location] = location.uuid
     return (locations)
 
 #load all caregivers into an array for easy searching
-def getCaregivers():
-    cur = getSrcUuid('mimiciii.caregivers', None)
+def getCaregivers(self):
+    cur = getSrcUuid(self, 'mimiciii.caregivers', None)
     caregivers = {}
     for caregiver in cur:
         caregivers[caregiver.cgid] = caregiver.uuid
     return(caregivers)
 
 #load all concepts into an array for easy searching
-def getConcepts():
-    cur = getSrcUuid('concepts', None)
+def getConcepts(self):
+    cur = getSrcUuid(self, 'concepts', None)
     concepts = {}
     concepts['test_num'] = {}
     concepts['test_text'] = {}
@@ -312,17 +306,9 @@ def getConcepts():
             concepts['icd9_codes'][concept.icd9_code] = concept.uuid
     return concepts
 
-#load all caregivers into an array for easy searching
-def getdItems():
-    cur = getSrcUuid('d_items', None)
-    ditems = {}
-    for ditem in cur:
-        ditems[ditem.itemid] = ditem.uuid
-    return(ditems) 
-
 #load mimic records with filter
-def getSrcFilter(table, Dict):
-    pg_cur = openPgCursor()
+def getSrcFilter(self, table, Dict):
+    pg_cur = openPgCursor(self)
     stmt = "select * from " + table
     for col_name in Dict:
         stmt += " where " + col_name + " = '" + str(Dict[col_name]) + "'"
@@ -337,7 +323,7 @@ def getSrcFilter(table, Dict):
         exit()
 
 #create record in openmrs database
-def insertDict(table, Dict):
+def insertDict(self, table, Dict):
     placeholder = ", ".join(["%s"] * len(Dict))
     mysql_cur = self.mysql_conn.cursor()
     stmt = "insert into `{table}` ({columns}) values ({values});".format(
@@ -358,7 +344,7 @@ def insertDict(table, Dict):
         exit()
 
 #set concepts auto_increment value
-def setIncrementer(table,value):
+def setIncrementer(self, table, value):
     mysql_cur = self.mysql_conn.cursor()
     stmt = "ALTER TABLE "+table+" AUTO_INCREMENT = " + value
     try:
@@ -372,8 +358,8 @@ def setIncrementer(table,value):
         exit()
 
 #create record in mimic database
-def updatePgDict(table, Dict, Filter):
-    pg_cur = openPgCursor()
+def updatePgDict(self, table, Dict, Filter):
+    pg_cur = openPgCursor(self)
     placeholder = ", ".join(["%s"] * len(Dict))
     #stmt = "update {table} set ({columns}) = ROW({values})".format(
     stmt = "update {table} set {columns} = {values}".format(
@@ -397,8 +383,8 @@ def updatePgDict(table, Dict, Filter):
         exit()
 
 #create record in mimic database
-def deletePgDict(table, Filter):
-    pg_cur = openPgCursor()
+def deletePgDict(self, table, Filter):
+    pg_cur = openPgCursor(self)
     #stmt = "update {table} set ({columns}) = ROW({values})".format(
     stmt = "delete from " + table + " where " 
     fields = []
@@ -433,12 +419,12 @@ def insertPgDict(self,table, Dict):
         exit()
 
 #run sql from file in mimic database
-def loadPgsqlFile(filename):
-    pg_cur = openPgCursor()
+def loadPgsqlFile(self,filename):
+    pg_cur = openPgCursor(self)
     #pg_cur = pg_conn.cursor()
     try:
         pg_cur.execute(open(filename, "r").read())
-        pg_conn.commit()
+        self.pg_conn.commit()
         return pg_cur
     except Exception as e:
         print("can't load file")
@@ -501,8 +487,8 @@ def delDict(endpoint, table, uuid):
     return(True)
 
 #load not-yet-imported admissions records for imported patients
-def getAdmissions(limit):
-    pg_cur = openPgCursor()
+def getAdmissions(self, limit):
+    pg_cur = openPgCursor(self)
     stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,diagnosis,edregtime,edouttime,deltadate.offset from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'mimiciii.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimiciii.admissions')"
     if (limit):
         stmt += " limit " + limit
@@ -515,7 +501,7 @@ def getAdmissions(limit):
         exit()
 
 # load data from admission related tables
-def getAdmissionData(admission):
+def getAdmissionData(self, admission):
     events_tables = [
         'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
         'inputevents_mv','labevents','microbiologyevents','noteevents',
@@ -527,13 +513,13 @@ def getAdmissionData(admission):
     admission_data = {}
     for table in tables:
         admission_data[table] = []
-        cur = getSrcFilter('mimiciii.' + table, {'hadm_id': admission.hadm_id})
+        cur = getSrcFilter(self, 'mimiciii.' + table, {'hadm_id': admission.hadm_id})
         for record in cur:
             admission_data[table].append(record)
     admission_data['events'] = {}
     for table in events_tables:
         admission_data['events'][table] = []
-        cur = getSrcFilter('mimiciii.' + table, {'hadm_id': admission.hadm_id})
+        cur = getSrcFilter(self, 'mimiciii.' + table, {'hadm_id': admission.hadm_id})
         for record in cur:
             admission_data['events'][table].append(record)
 
@@ -542,13 +528,13 @@ def getAdmissionData(admission):
 #MODEL MANIPULATION
 #
 # insert visit type records into encountertypes table in openmrs db
-def visittypestoVisitTypes():
+def visittypestoVisitTypes(self):
     src = 'visittypes'
-    et_cur = getSrc(src, None)
+    et_cur = getSrc(self, src, None)
     for record in et_cur:
         date = time.strftime('%Y-%m-%d %H:%M:%S')
         et_uuid = str(uuid.uuid4())
-        et_id = insertDict(
+        et_id = insertDict(self,
             'visit_type', {
                 "creator": "1",
                 "uuid": et_uuid,
@@ -556,19 +542,19 @@ def visittypestoVisitTypes():
                 "name": record.visittype,
                 "date_created": date,
             })
-        uuid_cur = insertPgDict('uuids', {
+        uuid_cur = insertPgDict(self, 'uuids', {
             'src': src,
             'row_id': record.row_id,
             'uuid': et_uuid
         })
         uuid_cur.close()
     et_cur.close()
-    pg_conn.commit()
+    self.pg_conn.commit()
 
 # post practitioners to openmrs fhir interface
-def caregiversToPractitioners(limit):
+def caregiversToPractitioners(self, limit):
     src = 'mimiciii.caregivers'
-    concept_cur = getSrc(src, limit)
+    concept_cur = getSrc(self, src, limit)
     for record in concept_cur:
         birthdate = randomDate("1900-01-01", "2000-01-01")
         gender = random.choice(['male', 'female'])
@@ -586,21 +572,21 @@ def caregiversToPractitioners(limit):
                 "active": True
             })
         if uuid:
-            uuid_cur = insertPgDict('uuids', {
+            uuid_cur = insertPgDict(self, 'uuids', {
                 'src': src,
                 'row_id': record.row_id,
                 'uuid': uuid
             })
             uuid_cur.close()
-            pg_conn.commit()
+            self.pg_conn.commit()
         else:
             print("Caregiver not created")
-            pg_conn.commit()
+            self.pg_conn.commit()
             exit()
     concept_cur.close()
 
 # delete then load a patient to openmrs fhir interface
-def reloadPatient(subject_id):
+def reloadPatient(self, subject_id):
     src = 'mimiciii.patients'
     #get patient from postgres
     patient_cur = getSrcDeltaUuid('mimiciii.patients', {'subject_id':subject_id})
@@ -612,9 +598,7 @@ def reloadPatient(subject_id):
         uuid=addPatient(record)
         if(uuid):
            print("added patient: " + uuid)
-           #save_json('Patient',uuid,patient)
-           #update uuids table
-           uuid_cur = updatePgDict('uuids', {
+           uuid_cur = updatePgDict(self, 'uuids', {
                'src': src,
                'row_id': record.row_id,
                'uuid': uuid
@@ -625,37 +609,17 @@ def reloadPatient(subject_id):
         else:
             print("no uuid for " + src + " row_id: " + str(record.row_id)) 
     #delete admissions from uuids table
-    admit_cur = getSrcFilter('mimiciii.admissions',{
+    admit_cur = getSrcFilter(self,'mimiciii.admissions',{
         'subject_id':subject_id
     })
     for record in admit_cur:
         print(record.row_id)
-        deletePgDict('uuids',{
+        deletePgDict(self, 'uuids',{
             'src':'mimiciii.admissions',
             'row_id':record.row_id
         })
-    pg_conn.commit()
+    self.pg_conn.commit()
     patient_cur.close()
-
-# post patients to openmrs fhir interface
-def patientsToPatients(limit):
-    src = 'mimiciii.patients'
-    patient_cur = getSrcDelta(src, False, limit)
-    for record in patient_cur:
-        uuid=addPatient(record)
-        if(uuid):
-           print("added patient: " + uuid)
-           #save_json('Patient',uuid,patient)
-           uuid_cur = insertPgDict('uuids', {
-               'src': src,
-               'row_id': record.row_id,
-               'uuid': uuid
-           })
-           uuid_cur.close()
-        else:
-            print("no uuid for " + src + " row_id: " + str(record.row_id)) 
-    patient_cur.close()
-    pg_conn.commit()
 
 def addPatient(self,record):
     gender = {"M": "male", "F": "female"}[record.gender]
@@ -700,13 +664,12 @@ def addPatient(self,record):
     self.pg_conn.commit()
     return(uuid)
 
+
 # post admissions to openmrs fhir encounters interface
-def admissionsToEncounters(limit):
-    admissions_cur = getAdmissions(limit)
-    for record in admissions_cur:
+def addAdmission(self,record):
         stay_array={}
         print("processing admission: " + str(record.hadm_id))
-        admission_data = getAdmissionData(record)
+        admission_data = getAdmissionData(self, record)
         # each admission generates a grandparent (visit encounter)
         # a parent (admission encounter)
         # and one or more icustay encounters
@@ -738,7 +701,130 @@ def admissionsToEncounters(limit):
             }]
         }
         visit_uuid = postDict('fhir', 'encounter', visit)
-        uuid_cur = insertPgDict('uuids', {
+#        uuid_cur = insertPgDict(self, 'uuids', {
+#            'src': 'mimiciii.admissions',
+#            'row_id': record.row_id,
+#            'uuid': visit_uuid
+#        })
+#        uuid_cur.close()
+        admission = {
+            "resourceType":
+            "Encounter",
+            "status":
+            "finished",
+            "type": [{
+                "coding": [{
+                    "display": record.admission_type
+                }]
+            }],
+            "subject": {
+                "id": record.patient_uuid,
+            },
+            "period": {
+                "start": deltaDate(record.admittime, record.offset),
+                "end": deltaDate(record.dischtime, record.offset)
+            },
+            "location": [{
+                "location": {
+                    "reference": "Location/" + record.admission_location_uuid,
+                },
+                "period": {
+                    "start": deltaDate(record.admittime, record.offset),
+                    "end": deltaDate(record.dischtime, record.offset)
+                }
+            }],
+            "partOf": {
+                "reference": "Encounter/" + visit_uuid,
+            }
+        }
+        admission_uuid = postDict('fhir', 'encounter', admission)
+        #save_json('Encounter',admission_uuid,admission)
+        if (admission_uuid == False):
+            return(False)
+        for icustay in admission_data['icustays']:
+            if(icustay.outtime is None):
+                outtime = icustay.intime
+            else:
+                outtime = icustay.outtime
+            print(icustay)
+            print("processing stay: " + str(icustay.icustay_id))
+            icuenc = {
+                "resourceType": "Encounter",
+                "status": "finished",
+                "type": [{
+                    "coding": [{
+                         "display": record.admission_type
+                    }]
+                }],
+                "subject": {
+                    "id": record.patient_uuid,
+                },
+                "period": {
+                    "start": deltaDate(icustay.intime, record.offset),
+                    "end": deltaDate(outtime, record.offset)
+                },
+                "location": [{
+                    "location": {
+                        "reference": "Location/" + location_array[icustay.first_careunit],
+                    },
+                    "period": {
+                        "start": deltaDate(icustay.intime, record.offset),
+                        "end": deltaDate(outtime, record.offset)
+                    }
+                }],
+                "partOf": {
+                    "reference": "Encounter/" + visit_uuid,
+                }
+            }
+            icuenc_uuid = postDict('fhir', 'encounter', icuenc)
+            stay_array[icustay.icustay_id] = icuenc_uuid
+        for events_source in admission_data['events']:
+             for event in admission_data['events'][events_source]:
+                 addObs(events_source,event,record,admission_uuid,stay_array)
+        addDiagnosis(record,admission_uuid)
+        return(visit_uuid)
+        self.pg_conn.commit()
+
+
+# post admissions to openmrs fhir encounters interface
+def admissionsToEncounters(self,limit):
+    admissions_cur = getAdmissions(self,limit)
+    for record in admissions_cur:
+        stay_array={}
+        print("processing admission: " + str(record.hadm_id))
+        admission_data = getAdmissionData(self, record)
+        # each admission generates a grandparent (visit encounter)
+        # a parent (admission encounter)
+        # and one or more icustay encounters
+        visit = {
+            "resourceType":
+            "Encounter",
+            "status":
+            "finished",
+            "type": [{
+                "coding": [{
+                    "code": record.visit_type_code
+                }]
+            }],
+            "subject": {
+                "id": record.patient_uuid,
+            },
+            "period": {
+                "start": deltaDate(record.admittime, record.offset),
+                "end": deltaDate(record.dischtime, record.offset)
+            },
+            "location": [{
+                "location": {
+                    "reference": "Location/" + record.admission_location_uuid,
+                },
+                "period": {
+                    "start": deltaDate(record.admittime, record.offset),
+                    "end": deltaDate(record.dischtime, record.offset)
+                }
+            }]
+        }
+        visit_uuid = postDict('fhir', 'encounter', visit)
+        uuid_cur = insertPgDict(self, 'uuids', {
             'src': 'mimiciii.admissions',
             'row_id': record.row_id,
             'uuid': visit_uuid
@@ -949,9 +1035,9 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
         return(None)
 
 # post locations to openmrs fhir interface
-def locationsToLocations():
+def locationsToLocations(self):
     src = 'locations'
-    locations_cur = getSrc(src, None)
+    locations_cur = getSrc(self, src, None)
     for record in locations_cur:
         uuid = postDict(
             'fhir',
@@ -963,19 +1049,19 @@ def locationsToLocations():
                 "description": record.location,
                 "status": "active"
             })
-        uuid_cur = insertPgDict('uuids', {
+        uuid_cur = insertPgDict(self, 'uuids', {
             'src': src,
             'row_id': record.row_id,
             'uuid': uuid
         })
         uuid_cur.close()
     locations_cur.close()
-    pg_conn.commit()
+    self.pg_conn.commit()
 
 # post encounter types to openmrs rest interface
-def postEncounterTypes():
+def postEncounterTypes(self):
     src = 'encountertypes'
-    et_cur = getSrc(src, None)
+    et_cur = getSrc(self, src, None)
     for record in et_cur:
         uuid=postDict(
             'rest',
@@ -984,19 +1070,19 @@ def postEncounterTypes():
                 "name": record.encountertype,
                 "description": record.encountertype,
             })
-        uuid_cur = insertPgDict('uuids', {
+        uuid_cur = insertPgDict(self, 'uuids', {
             'src': src,
             'row_id': record.row_id,
             'uuid': uuid
         })
         uuid_cur.close()
     et_cur.close()
-    pg_conn.commit()
+    self.pg_conn.commit()
 
 # post visit types to openmrs rest interface
-def postVisitTypes():
+def postVisitTypes(self):
     src = 'visittypes'
-    et_cur = getSrc(src, None)
+    et_cur = getSrc(self, src, None)
     for record in et_cur:
         uuid=postDict(
             'rest',
@@ -1005,23 +1091,23 @@ def postVisitTypes():
                 "name": record.visittype,
                 "description": record.visittype,
             })
-        uuid_cur = insertPgDict('uuids', {
+        uuid_cur = insertPgDict(self,'uuids', {
             'src': src,
             'row_id': record.row_id,
             'uuid': uuid
         })
         uuid_cur.close()
     et_cur.close()
-    pg_conn.commit()
+    self.pg_conn.commit()
 
 # insert concepts into openmrs concepts and related tables
-def conceptsToConcepts():
+def conceptsToConcepts(self):
     src = 'concepts'
     #change the auto_increment value so we don't step on built-in concepts
-    setIncrementer('concept','166000')
-    setIncrementer('concept_name','166000')
-    setIncrementer('concept_description','166000')
-    concept_cur = getSrc(src, None)
+    setIncrementer(self, 'concept','166000')
+    setIncrementer(self, 'concept_name','166000')
+    setIncrementer(self, 'concept_description','166000')
+    concept_cur = getSrc(self, src, None)
     for record in concept_cur:
         date = time.strftime('%Y-%m-%d %H:%M:%S')
         concept_uuid = str(uuid.uuid4())
@@ -1033,7 +1119,7 @@ def conceptsToConcepts():
                 "uuid": concept_uuid
         }
         concept_id = None
-        concept_id = insertDict('concept',concept)
+        concept_id = insertDict(self, 'concept',concept)
         concept_name_1 = {
                 "concept_id": concept_id,
                 "name": record.shortname,
@@ -1044,7 +1130,7 @@ def conceptsToConcepts():
                 "concept_name_type": "SHORT",
                 "uuid": str(uuid.uuid4())
             }
-        insertDict('concept_name',concept_name_1)
+        insertDict(self, 'concept_name',concept_name_1)
         concept_name_2 = {
                 "concept_id": concept_id,
                 "name": record.longname,
@@ -1055,7 +1141,7 @@ def conceptsToConcepts():
                 "concept_name_type": "FULLY_SPECIFIED",
                 "uuid": str(uuid.uuid4())
             }
-        insertDict('concept_name',concept_name_2)
+        insertDict(self, 'concept_name',concept_name_2)
         if(record.description):
             description = record.description
         else:
@@ -1070,7 +1156,7 @@ def conceptsToConcepts():
                 "description": description,
                 "uuid": str(uuid.uuid4())
             }
-        insertDict('concept_description',concept_description)
+        insertDict(self, 'concept_description',concept_description)
         if record.avg_val:
             numeric={
                     "concept_id": concept_id,
@@ -1080,34 +1166,34 @@ def conceptsToConcepts():
                 }
             if record.units:
                 numeric["units"]=record.units
-            insertDict('concept_numeric',numeric)
+            insertDict(self, 'concept_numeric',numeric)
         elif record.concept_type == 'test_num':
             numeric={
                     "concept_id": concept_id,
                     "precise": "1",
                 }
-            insertDict('concept_numeric',numeric)
-        uuid_cur = insertPgDict('uuids', {
+            insertDict(self, 'concept_numeric',numeric)
+        uuid_cur = insertPgDict(self, 'uuids', {
             'src': src,
             'row_id': record.row_id,
             'uuid': concept_uuid
         })
         uuid_cur.close()
-        update_cur = updatePgDict('concepts', {
+        update_cur = updatePgDict(self, 'concepts', {
             'openmrs_id': concept_id,
         },{
             'row_id': record.row_id,
         })
         update_cur.close()
     concept_cur.close()
-    setIncrementer('concept','3')
-    setIncrementer('concept_name','21')
-    setIncrementer('concept_description','1')
-    pg_conn.commit()
+    setIncrementer(self, 'concept','3')
+    setIncrementer(self, 'concept_name','21')
+    setIncrementer(self, 'concept_description','1')
+    self.pg_conn.commit()
 
 # link enumerated concepts to their parent concepts
-def genConceptMap():
-    concept_cur = getConceptMap()
+def genConceptMap(self):
+    concept_cur = getConceptMap(self)
     for record in concept_cur:
         date = time.strftime('%Y-%m-%d %H:%M:%S')
         concept_uuid = str(uuid.uuid4())
@@ -1118,14 +1204,14 @@ def genConceptMap():
                 "creator": "1",
                 "uuid": concept_uuid
         }
-        insertDict('concept_answer',concept_answer);
+        insertDict(self,'concept_answer',concept_answer);
     concept_cur.close()
-    pg_conn.commit()
+    self.pg_conn.commit()
 
-def getUuids():
+def getUuids(self):
     global location_array
     global caregiver_array
     global concepts_array
-    location_array = getLocations()
-    caregiver_array = getCaregivers()
-    concepts_array = getConcepts()
+    location_array = getLocations(self)
+    caregiver_array = getCaregivers(self)
+    concepts_array = getConcepts(self)
