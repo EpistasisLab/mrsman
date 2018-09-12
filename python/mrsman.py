@@ -21,7 +21,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
-numThreads = 100
+numThreads = 50
 
 #THREADING
 #
