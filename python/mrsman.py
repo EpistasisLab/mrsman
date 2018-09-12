@@ -9,6 +9,7 @@ import names
 import requests
 import random
 import time
+import threading
 from luhn import *
 from metadata import *
 from requests.auth import HTTPBasicAuth
@@ -20,6 +21,74 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
+numThreads = 10
+
+#THREADING
+#
+class myThread (threading.Thread):
+   def __init__(self, threadID):
+      threading.Thread.__init__(self)
+      self.threadID = threadID
+      self.name = 'Thread' + str(threadID)
+   def run(self):
+      bootstrap(self)
+      print ("Starting %s: %s" % (self.name, time.ctime(time.time())))
+      run_task(self)
+      print ("Exiting %s: %s" % (self.name, time.ctime(time.time())))
+      shutdown(self)
+
+def run_task(self):
+   taskname = self.taskName
+   threadName = self.name
+   counter  = self.count
+   while counter:
+      if exitFlag:
+         return()
+      self.taskName(self)
+      print ("thread %s, iter %s" % (self.name, counter))
+      counter -= 1
+
+
+def splitTask(num,taskName):
+    if(num < numThreads):
+      ns = num
+    else:
+      ns = numThreads
+    threads = {}
+    count = math.floor(num/ns)
+    for x in range(0, ns):
+      threads[x] = myThread(x)
+      threads[x].ns = ns
+      threads[x].x = x
+      threads[x].count = count
+      threads[x].taskName = taskName
+    for x in threads:
+        thread = threads[x]
+        thread.start()
+    for x in threads:
+       thread = threads[x]
+       thread.join()
+
+
+def returnModuloRecords(self,src):
+    mod = self.x
+    Dict = {"MOD("+src+".row_id,"+ str(numThreads) +")":str(mod)}
+    print('loading '+src+' mod: ' + str(mod));
+    cur = getSrcDelta(self,src, Dict, 1)
+    for record in cur:
+        uuid=self.addder(self,record)
+        if(uuid):
+           print("added "+src+": " + uuid)
+           uuid_cur = insertPgDict(self,'uuids', {
+               'src': src,
+               'row_id': record.row_id,
+               'uuid': uuid
+           })
+           uuid_cur.close()
+        else:
+            print("no uuid for " + src + " row_id: " + str(record.row_id)) 
+    cur.close()
+    self.pg_conn.commit()
 
 # UTILITY
 #
@@ -34,9 +103,9 @@ def save_json(model_type,uuid,data):
         json.dump(data, outfile)
 
 #read config file and initialize database connections
-def bootstrap():
-    global pg_conn
-    global mysql_conn
+def bootstrap(self):
+    #global pg_conn
+    #global mysql_conn
     global config
     parent_dir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
     with open(parent_dir + '/config.json') as f:
@@ -45,7 +114,7 @@ def bootstrap():
         config['baseuri'] = 'http://' + config['IP'] + ':' +  config['OPENMRS_PORT'] + '/openmrs/ws'
     #connect to openmrs psql
     try:
-        pg_conn = psycopg2.connect(
+        self.pg_conn = psycopg2.connect(
             dbname='mimic', user=config['PGSQL_USER'], password=config['PGSQL_PASS'])
     except Exception as e:
         print("unable to connect to the postgres databases")
@@ -53,19 +122,19 @@ def bootstrap():
         exit()
     #connect to openmrs mysql
     try:
-        mysql_conn = pymysql.connect(
+        self.mysql_conn = pymysql.connect(
             user=config['MYSQL_USER'], passwd=config['MYSQL_PASS'], db=config['SISTER'])
     except:
         print("unable to connect to the mysql database")
         exit()
-    return(True)
+    return()
 
 
-def shutdown():
-    pg_conn.commit()
-    mysql_conn.commit()
-    pg_conn.close()
-    mysql_conn.close()
+def shutdown(self):
+    self.pg_conn.commit()
+    self.mysql_conn.commit()
+    self.pg_conn.close()
+    self.mysql_conn.close()
 
 # choose a random date from a range
 def randomDate(start, end):
@@ -113,8 +182,8 @@ def deltaDate(src_date, offset):
     return str((src_date + relativedelta(days=-offset)).isoformat())
 
 #open a postgres cursor set to sister name
-def openPgCursor():
-    pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+def openPgCursor(self):
+    pg_cur = self.pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     return(pg_cur)
 
 # DATA I/O
@@ -134,14 +203,24 @@ def getSrc(table, limit):
         exit()
 
 #load not-yet-imported mimic records joined to deltadate
-def getSrcDelta(table, limit):
-    pg_cur = openPgCursor()
+def getSrcDelta(self, table, Dict, limit):
+    pg_cur = openPgCursor(self)
     stmt = "select " + table + ".*,deltadate.offset from " + table + " left join deltadate on deltadate.subject_id = " + table + ".subject_id where row_id not in (select row_id from uuids where src = '" + table + "')"
+    if(Dict):
+        stmt += " and "
+        fields = []
+        for col_name in Dict:
+            fields.append(col_name + " = '" + str(Dict[col_name]) + "'")
+        stmt += ' and ' .join(fields)
     if (limit):
-        stmt += " limit " + limit
+        if(isinstance(limit,str)):
+            stmt += " limit " + limit
+        elif(isinstance(limit,int)):
+            stmt += " limit " + str(limit)
     try:
         if debug:
             print(stmt)
+        print(stmt)
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
@@ -260,7 +339,7 @@ def getSrcFilter(table, Dict):
 #create record in openmrs database
 def insertDict(table, Dict):
     placeholder = ", ".join(["%s"] * len(Dict))
-    mysql_cur = mysql_conn.cursor()
+    mysql_cur = self.mysql_conn.cursor()
     stmt = "insert into `{table}` ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
     try:
@@ -280,7 +359,7 @@ def insertDict(table, Dict):
 
 #set concepts auto_increment value
 def setIncrementer(table,value):
-    mysql_cur = mysql_conn.cursor()
+    mysql_cur = self.mysql_conn.cursor()
     stmt = "ALTER TABLE "+table+" AUTO_INCREMENT = " + value
     try:
         mysql_cur.execute(stmt)
@@ -337,9 +416,9 @@ def deletePgDict(table, Filter):
         exit()
 
 #create record in postgres database
-def insertPgDict(table, Dict):
+def insertPgDict(self,table, Dict):
     #pg_cur = pg_conn.cursor()
-    pg_cur = openPgCursor()
+    pg_cur = openPgCursor(self)
     placeholder = ", ".join(["%s"] * len(Dict))
     stmt = "insert into {table} ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
@@ -424,7 +503,6 @@ def delDict(endpoint, table, uuid):
 #load not-yet-imported admissions records for imported patients
 def getAdmissions(limit):
     pg_cur = openPgCursor()
-    #pg_cur = pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
     stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,diagnosis,edregtime,edouttime,deltadate.offset from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'mimiciii.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimiciii.admissions')"
     if (limit):
         stmt += " limit " + limit
@@ -562,7 +640,7 @@ def reloadPatient(subject_id):
 # post patients to openmrs fhir interface
 def patientsToPatients(limit):
     src = 'mimiciii.patients'
-    patient_cur = getSrcDelta(src, limit)
+    patient_cur = getSrcDelta(src, False, limit)
     for record in patient_cur:
         uuid=addPatient(record)
         if(uuid):
@@ -579,7 +657,7 @@ def patientsToPatients(limit):
     patient_cur.close()
     pg_conn.commit()
 
-def addPatient(record):
+def addPatient(self,record):
     gender = {"M": "male", "F": "female"}[record.gender]
     deceasedBoolean = {1: True, 0: False}[record.expire_flag]
     if(use_omrsnum):
@@ -619,7 +697,7 @@ def addPatient(record):
     if(debug):
         print(patient)
     uuid = postDict('fhir', 'patient', patient)
-    pg_conn.commit()
+    self.pg_conn.commit()
     return(uuid)
 
 # post admissions to openmrs fhir encounters interface
@@ -745,6 +823,7 @@ def admissionsToEncounters(limit):
     admissions_cur.close()
     pg_conn.commit()
 
+#create a fhir observation for admission diagnosis
 def addDiagnosis(admission,encounter_uuid):
     observation = {
         "resourceType": "Observation",

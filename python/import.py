@@ -1,61 +1,76 @@
 #!/usr/bin/env python3
 import sys
-#TASKS
-#
-#initialize openmrs database (run before initial website load on fresh install)
-def initDb():
+import mrsman;
+class base ():
+  def __init__(self):
+    if (len(sys.argv) > 1):
+        #run function from cli
+        a = eval("base." + sys.argv[1])
+        self.exitFlag = 0
+        a(self)
+#        try:
+#            a(self)
+#        except (KeyboardInterrupt, SystemExit):
+#            print('\n! Received keyboard interrupt, quitting threads.\n')
+#            exitFlag = 1
+    else:
+        tmp = globals().copy()
+        print("available arguments:")
+        [print(k) for k in dir(base) if not k.startswith('_') and k != 'sys']
+  #TASKS
+  #
+  #initialize openmrs database (run before initial website load on fresh install)
+  def initDb(self):
+    mrsman.bootstrap(self)
     print("initializing database")
-    loadPgsqlFile('../mimic/sql/add_tables.sql')
-
-def initConcepts():
+    mrsman.loadPgsqlFile('../mimic/sql/add_tables.sql')
+    mrsman.shutdown(self)
+  #
+  def initConcepts(self):
+    mrsman.bootstrap(self)
     print("import concepts")
-    conceptsToConcepts()
+    mrsman.conceptsToConcepts()
     print("link mapped concepts")
-    genConceptMap()
-
-#rest based record creation
-def initRestResources():
-    locationsToLocations()
-    postEncounterTypes()
-    postVisitTypes()
-
-#fhir
-def initCaregivers():
-    caregiversToPractitioners(None)
-
-#fhir
-def initPatients():
-    getUuids()
+    mrsman.genConceptMap()
+    mrsman.shutdown(self)
+  #rest based record creation
+  def initRestResources():
+    mrsman.bootstrap(self)
+    mrsman.locationsToLocations()
+    mrsman.postEncounterTypes()
+    mrsman.postVisitTypes()
+    mrsman.shutdown(self)
+  #fhir
+  def initCaregivers():
+    mrsman.bootstrap(self)
+    mrsman.caregiversToPractitioners(None)
+    mrsman.shutdown(self)
+  #fhir
+  def initPatients(self):
     try:
         num = int(eval(sys.argv[2]))
     except:
         num = 1
-    for x in range(0, num):
-        patientsToPatients('1')
-        admissionsToEncounters(None)
-
-#fhir
-def initAdmit():
-    getUuids()
-    admissionsToEncounters(None)
-
-#fhir
-def reinitPatient():
-    getUuids()
+    mrsman.exitFlag = False
+    try:
+        mrsman.splitTask(num,mrsman.loadPatients)
+    except (KeyboardInterrupt, SystemExit):
+        print('\n! Received keyboard interrupt, quitting threads.\n')
+        mrsman.exitFlag = True
+  #        patientsToPatients('1')
+  #        admissionsToEncounters(None)
+  #fhir
+  def initAdmit(self):
+    mrsman.bootstrap(self)
+    mrsman.getUuids()
+    mrsman.admissionsToEncounters(None)
+    mrsman.shutdown(self)
+  #fhir
+  def reinitPatient(self):
+    mrsman.bootstrap(self)
+    mrsman.getUuids()
     subject_id = sys.argv[2]
-    reloadPatient(subject_id)
-
-#MAIN
+    mrsman.reloadPatient(subject_id)
+    mrsman.shutdown(self)
 #
-#connect to mimic dataset postgres
-if (len(sys.argv) > 1):
-    from mrsman import *
-    bootstrap()
-    #run function from cli
-    a = eval(sys.argv[1])
-    a()
-    shutdown()
-else:
-    tmp = globals().copy()
-    print("available arguments:")
-    [print(k) for k, v in tmp.items() if not k.startswith('_') and k != 'sys']
+base()
