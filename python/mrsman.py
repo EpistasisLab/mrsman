@@ -21,7 +21,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
-numThreads = 20
+numThreads = 100
 
 #THREADING
 #
@@ -437,8 +437,8 @@ def postDict(endpoint, table, Dict):
         uri = config['baseuri'] + "/fhir/" + table.capitalize()
     else:
         uri = config['baseuri'] + "/rest/v1/" + table
-    r = requests.post(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']),headers={'Connection':'close'})
-    #r.connection.close()
+    r = requests.post(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']),headers={'Connection':'close'},  stream=False)
+    r.connection.close()
     if debug:
         print('post:')
         print(Dict)
