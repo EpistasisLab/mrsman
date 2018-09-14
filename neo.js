@@ -19,7 +19,7 @@ if (argv['i']) {
 }
 
 //load site data
-var exP = awcm.syncFile('neo.json');
+var exP = awcm.syncFile('config.json');
 exP.then(function(site) {
 console.log(site);
 	if (site.global.IP !== undefined) {

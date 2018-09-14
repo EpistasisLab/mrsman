@@ -21,11 +21,11 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
-numThreads = 50
+numThreads = 3
 
 #THREADING
 #
-class myThread (threading.Thread):
+class mrsThread (threading.Thread):
    def __init__(self, threadID):
       threading.Thread.__init__(self)
       self.threadID = threadID
@@ -47,26 +47,29 @@ def runTask(self):
       counter -= 1
 
 
+#load num records from src using adder - split among numThreads
 def splitTask(num,src,adder):
     if(num < numThreads):
-      ns = num
+      nt = num
     else:
-      ns = numThreads
+      nt = numThreads
     threads = {}
-    count = math.floor(num/ns)
-    for x in range(0, ns):
-      threads[x] = myThread(x)
-      threads[x].ns = ns
+    count = math.floor(num/nt)
+    #set up threads
+    for x in range(0, nt):
+      threads[x] = mrsThread(x)
+      threads[x].nt = nt
       threads[x].x = x
       threads[x].count = count
       threads[x].src = src
       threads[x].adder = adder
+    #start threads
     for x in threads:
-        thread = threads[x]
-        thread.start()
+      thread = threads[x]
+      thread.start()
     for x in threads:
-       thread = threads[x]
-       thread.join()
+      thread = threads[x]
+      thread.join()
 
 
 def addModuloRecords(self):
