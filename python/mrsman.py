@@ -21,7 +21,8 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
-numThreads = 3
+numThreads = 1
+exitFlag = False
 
 #THREADING
 #
@@ -30,38 +31,62 @@ class mrsThread (threading.Thread):
       threading.Thread.__init__(self)
       self.threadID = threadID
       self.name = 'Thread' + str(threadID)
+      self.dict = False
    def run(self):
       bootstrap(self)
       print ("Starting %s: %s" % (self.name, time.ctime(time.time())))
-      runTask(self)
+      while self.counter:
+          if exitFlag:
+              break
+          print ("thread %s, iter %s" % (self.name, self.counter))
+          if not (self.task(self)):
+              break
+          self.counter -= 1
       print ("Exiting %s: %s" % (self.name, time.ctime(time.time())))
       shutdown(self)
 
-def runTask(self):
-   counter = self.count
-   while counter:
-      if exitFlag:
-         return()
-      addModuloRecords(self)
-      print ("thread %s, iter %s" % (self.name, counter))
-      counter -= 1
-
+#
+def runTask(self,src,task,adder,num):
+    if (numThreads > 1):
+        splitTask(src,task,adder,num)
+    else:
+        self.limit = num
+        self.task = task
+        self.adder = adder
+        self.x = False
+        self.dict = False
+        self.src = src
+        self.task(self)
 
 #load num records from src using adder - split among numThreads
-def splitTask(num,src,adder):
-    if(num < numThreads):
-      nt = num
+def splitTask(src,task,adder,num):
+    if(num and num < numThreads):
+        nt = num
     else:
-      nt = numThreads
+        nt = numThreads
+    if(num):
+        counter = math.floor(num/nt)
+        limit = 1
+    else:
+        counter = 1
+        limit = False
     threads = {}
-    count = math.floor(num/nt)
     #set up threads
     for x in range(0, nt):
       threads[x] = mrsThread(x)
+      #function used to fetch records
+      threads[x].task = task
+      #number of threads
       threads[x].nt = nt
+      #records to fetch at once
+      threads[x].limit = limit
+      #number of iterations for each thread
+      threads[x].counter = counter
+      #this thread number
       threads[x].x = x
-      threads[x].count = count
+      #source table
       threads[x].src = src
+      #function used to process a record
       threads[x].adder = adder
     #start threads
     for x in threads:
@@ -71,9 +96,16 @@ def splitTask(num,src,adder):
       thread = threads[x]
       thread.join()
 
+def getRecords(self):
+    adder = self.adder
+    cur = getSrcDeltaUuid(self)
+    for record in cur:
+        adder(self,record)
+    cur.close()
+    self.pg_conn.commit()
 
-def addModuloRecords(self):
-    adder = eval(self.adder)
+def addRecords(self):
+    adder = self.adder
     cur = getSrcDelta(self)
     for record in cur:
         uuid=adder(self,record)
@@ -125,8 +157,8 @@ def bootstrap(self):
     except:
         print("unable to connect to the mysql database")
         exit()
+    getUuids(self)
     return()
-
 
 def shutdown(self):
     self.pg_conn.commit()
@@ -187,16 +219,16 @@ def openPgCursor(self):
 # DATA I/O
 #
 #load not-yet-imported mimic records
-def getSrc(self, table, limit):
+def getSrc(self, limit):
     pg_cur = openPgCursor(self)
-    stmt = "select * from " + table + " where row_id not in (select row_id from uuids where src = '" + table + "')"
+    stmt = "select * from " + self.src + " where row_id not in (select row_id from uuids where src = '" + self.src + "')"
     if (limit):
         stmt += " limit " + limit
     try:
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
-        print("can't select from " + table)
+        print("can't select from " + self.src)
         print(e)
         exit()
 
@@ -213,7 +245,8 @@ def getSrcDelta(self):
         for col_name in Dict:
             fields.append(col_name + " = '" + str(Dict[col_name]) + "'")
         stmt += ' and ' .join(fields)
-    stmt += " limit 1"
+    if(self.limit):
+        stmt += " limit " + str(self.limit)
     try:
         if debug:
             print(stmt)
@@ -225,21 +258,30 @@ def getSrcDelta(self):
         print(e)
         exit()
 
-#load not-yet-imported mimic records joined to deltadate
-def getSrcDeltaUuid(self, table, Dict):
+#load already-imported mimic records joined to deltadate
+def getSrcDeltaUuid(self):
+    Dict = False
+    if(self.x):
+      Dict = {"MOD("+self.src+".row_id,"+ str(numThreads) +")":str(self.x)}
+    if(self.dict):
+      Dict = self.dict
     pg_cur = openPgCursor(self)
-    stmt = "select " + table + ".*,deltadate.offset,uuids.uuid from " + table + " left join deltadate on deltadate.subject_id = " + table + ".subject_id  left join uuids on " + table + ".row_id = uuids.row_id and uuids.src = '" + table + "'"
-    if Dict:
+    stmt = "select " + self.src + ".*,deltadate.offset,uuids.uuid from " + self.src + " left join deltadate on deltadate.subject_id = " + self.src + ".subject_id  left join uuids on " + self.src + ".row_id = uuids.row_id and uuids.src = '" + self.src + "'"
+    if(Dict):
+        stmt += " and "
+        fields = []
         for col_name in Dict:
-            stmt += " where " + table + "." + col_name + " = '" + str(
-                Dict[col_name]) + "'"
+            fields.append(col_name + " = '" + str(Dict[col_name]) + "'")
+        stmt += ' and ' .join(fields)
+    if(self.limit):
+        stmt += ' limit ' + str(self.limit)
     try:
         if debug:
             print(stmt)
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
-        print("can't select from " + table)
+        print("can't select from " + self.src)
         print(e)
         exit()
 
@@ -465,8 +507,7 @@ def postDict(endpoint, table, Dict):
         return(False)
 
 #post a json encoded record to the fhir/rest interface
-def putDict(endpoint, table, Dict):
-    new_uuid = str(uuid.uuid4())
+def putDict(endpoint, table, Dict, new_uuid):
     Dict['id'] = new_uuid;
     if (endpoint == 'fhir'):
         uri = config['baseuri'] + "/fhir/" + table.capitalize() + "/" + new_uuid
@@ -475,8 +516,12 @@ def putDict(endpoint, table, Dict):
     r = requests.put(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']))
     if debug:
         print(Dict)
+    print(r.status_code)
     if ("Location" in r.headers):
         return (r.headers['Location'].split('/').pop())
+    elif (r.status_code == 200) :
+        print(r.text)
+        return (True)
     else:
         print("Unexpected response:")
         print(r.text)
@@ -533,8 +578,8 @@ def getAdmissionData(self, admission):
 #
 # insert visit type records into encountertypes table in openmrs db
 def visittypestoVisitTypes(self):
-    src = 'visittypes'
-    et_cur = getSrc(self, src, None)
+    self.src = 'visittypes'
+    et_cur = getSrc(self, None)
     for record in et_cur:
         date = time.strftime('%Y-%m-%d %H:%M:%S')
         et_uuid = str(uuid.uuid4())
@@ -557,8 +602,8 @@ def visittypestoVisitTypes(self):
 
 # post practitioners to openmrs fhir interface
 def caregiversToPractitioners(self, limit):
-    src = 'mimiciii.caregivers'
-    concept_cur = getSrc(self, src, limit)
+    self.src = 'mimiciii.caregivers'
+    concept_cur = getSrc(self, limit)
     for record in concept_cur:
         birthdate = randomDate("1900-01-01", "2000-01-01")
         gender = random.choice(['male', 'female'])
@@ -593,7 +638,9 @@ def caregiversToPractitioners(self, limit):
 def reloadPatient(self, subject_id):
     src = 'mimiciii.patients'
     #get patient from postgres
-    patient_cur = getSrcDeltaUuid('mimiciii.patients', {'subject_id':subject_id})
+    self.src = 'mimiciii.patients'
+    self.dict = {'subject_id':subject_id}
+    patient_cur = getSrcDeltaUuid(self)
     for record in patient_cur:
         if(record.uuid):
             #remove old uuid
@@ -914,7 +961,10 @@ def admissionsToEncounters(self,limit):
     pg_conn.commit()
 
 #create a fhir observation for admission diagnosis
-def addDiagnosis(admission,encounter_uuid):
+def addDiag(self,admission):
+    addDiagnosis(admission,admission.uuid)
+
+def addDiagnosisOld(admission,encounter_uuid):
     observation = {
         "resourceType": "Observation",
         "code": {
@@ -1038,10 +1088,173 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
         print([obs_type,concept_uuid,value_type,value,units,date,obs.row_id])
         return(None)
 
+def addDiagnosis(admission,encounter_uuid):
+    certainty_json = {
+        "resourceType": "Observation",
+        "code": {
+            "coding": [
+#                {
+#                    "system": "org.openmrs.module.emrapi",
+#                    "code": "Diagnosis Certainty"
+#                },
+                {
+                    "system": "http://openmrs.org",
+                    "code": "159394AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                }
+            ]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "context": {
+            "reference": "Encounter/" + encounter_uuid,
+        },
+        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
+#        "performer": [
+#            {
+#                "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
+#            }
+#        ],
+        "valueCodeableConcept": {
+           "coding": [
+#                {
+#                    "system": "org.openmrs.module.emrapi",
+#                    "code": "Presumed"
+#                },
+                {
+                    "system": "http://openmrs.org",
+                    "code": "159393AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                }
+            ]
+        }
+    }
+    diagnosis_json = {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": {
+            "coding": [
+#                {
+#                    "system": "org.openmrs.module.emrapi",
+#                    "code": "Non-Coded Diagnosis"
+#                },
+                {
+                    "system": "http://openmrs.org",
+                    "code": "161602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                }
+            ]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "context": {
+            "reference": "Encounter/" + encounter_uuid,
+        },
+#        "effectiveDateTime":  deltaDate(record.admittime,record.offset)
+        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
+#        "performer": [
+#            {
+#                "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
+#            }
+#        ],
+        "valueString": admission.diagnosis
+    }
+    order_json = {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": {
+            "coding": [
+#                {
+#                    "system": "org.openmrs.module.emrapi",
+#                    "code": "Diagnosis Order"
+#                },
+                {
+                    "system": "http://openmrs.org",
+                    "code": "159946AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                }
+            ]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "context": {
+            "reference": "Encounter/" + encounter_uuid,
+        },
+        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
+#        "performer": [
+#            {
+#                "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
+#            }
+#        ],
+        "valueCodeableConcept": {
+            "coding": [
+#                {
+#                    "system": "org.openmrs.module.emrapi",
+#                    "code": "Primary"
+#                },
+                {
+                    "system": "http://openmrs.org",
+                    "code": "159943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                }
+            ]
+        }
+    }
+    order_uuid = postDict('fhir', 'observation', order_json)
+    diagnosis_uuid = postDict('fhir','observation',diagnosis_json)
+    certainty_uuid = postDict('fhir','observation',certainty_json)
+#    print(certainty_json)
+#    print(certainty_uuid)
+    obsgroup_json = {
+        "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                    "system": "http://openmrs.org",
+                    "code": "159947AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            }]
+        },
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "context": {
+            "reference": "Encounter/" + encounter_uuid,
+        },
+        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
+        #"performer": [
+        #    {
+        #    "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
+        #    }
+        #],
+        "valueString": '',
+        "related": [
+            {
+                "type": "has-member",
+                "target": {
+                    "reference": "Observation/" + certainty_uuid,
+                }
+            },
+            {
+                "type": "has-member",
+                "target": {
+                    "reference": "Observation/" + diagnosis_uuid,
+                }
+            },
+            {
+                "type": "has-member",
+                "target": {
+                    "reference": "Observation/" + order_uuid,
+                }
+            }
+        ]
+    }
+    obsgroup_uuid = postDict('fhir','observation',obsgroup_json)
+    print(obsgroup_json)
+    print(obsgroup_uuid)
+
+#    save_json('diagnosis',obsgroup_uuid,[certainty_json,diagnosis_json,order_json,obsgroup_json])
+
 # post locations to openmrs fhir interface
 def locationsToLocations(self):
-    src = 'locations'
-    locations_cur = getSrc(self, src, None)
+    self.src = 'locations'
+    locations_cur = getSrc(self, None)
     for record in locations_cur:
         uuid = postDict(
             'fhir',
@@ -1064,8 +1277,8 @@ def locationsToLocations(self):
 
 # post encounter types to openmrs rest interface
 def postEncounterTypes(self):
-    src = 'encountertypes'
-    et_cur = getSrc(self, src, None)
+    self.src = 'encountertypes'
+    et_cur = getSrc(self, None)
     for record in et_cur:
         uuid=postDict(
             'rest',
@@ -1085,8 +1298,8 @@ def postEncounterTypes(self):
 
 # post visit types to openmrs rest interface
 def postVisitTypes(self):
-    src = 'visittypes'
-    et_cur = getSrc(self, src, None)
+    self.src = 'visittypes'
+    et_cur = getSrc(src, None)
     for record in et_cur:
         uuid=postDict(
             'rest',
@@ -1106,12 +1319,12 @@ def postVisitTypes(self):
 
 # insert concepts into openmrs concepts and related tables
 def conceptsToConcepts(self):
-    src = 'concepts'
+    self.src = 'concepts'
     #change the auto_increment value so we don't step on built-in concepts
     setIncrementer(self, 'concept','166000')
     setIncrementer(self, 'concept_name','166000')
     setIncrementer(self, 'concept_description','166000')
-    concept_cur = getSrc(self, src, None)
+    concept_cur = getSrc(self, None)
     for record in concept_cur:
         date = time.strftime('%Y-%m-%d %H:%M:%S')
         concept_uuid = str(uuid.uuid4())

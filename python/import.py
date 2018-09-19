@@ -6,12 +6,11 @@ class base ():
     if (len(sys.argv) > 1):
         #run function from cli
         a = eval("base." + sys.argv[1])
-        self.exitFlag = 0
+        #self.exitFlag = 0
         a(self)
     else:
         tmp = globals().copy()
         print("available arguments:")
-        print(dir(base))
         [print(k) for k in dir(base) if not k.startswith('_') and k != 'sys']
   #
   #Operations
@@ -48,11 +47,11 @@ class base ():
         num = int(eval(sys.argv[2]))
     except:
         num = 1
-    mrsman.exitFlag = False
+    #mrsman.exitFlag = False
     src = 'mimiciii.patients'
     adder = 'addPatient'
     try:
-        mrsman.splitTask(num,src,adder)
+        mrsman.runTask(num,src,adder)
     except (KeyboardInterrupt, SystemExit):
         print('\n! Received keyboard interrupt, quitting threads.\n')
         mrsman.exitFlag = True
@@ -63,20 +62,31 @@ class base ():
     except:
         num = 1
     mrsman.bootstrap(self)
-    mrsman.getUuids(self)
-    mrsman.exitFlag = False
+    #mrsman.exitFlag = False
     src = 'kate.combined_admissions'
-    adder = 'addAdmission'
+    task = mrsman.addRecords
+    adder = mrsman.addAdmission
     try:
-        mrsman.splitTask(num,src,adder)
+        mrsman.runTask(self,src,task,adder,num)
     except (KeyboardInterrupt, SystemExit):
+        mrsman.exitFlag = True
         print('\n! Received keyboard interrupt, quitting threads.\n')
+  #fhir
+  def genDiagnosis(self):
+    try:
+        num = int(eval(sys.argv[2]))
+    except:
+        num = 1
+    mrsman.bootstrap(self)
+    src = 'kate.combined_admissions'
+    task = mrsman.getRecords
+    adder = mrsman.addDiag
+    mrsman.runTask(self,src,task,adder,num)
   #fhir
   def reinitPatient(self):
     mrsman.bootstrap(self)
-    mrsman.getUuids(self)
     subject_id = sys.argv[2]
     mrsman.reloadPatient(subject_id)
     mrsman.shutdown(self)
-#
+
 base()
