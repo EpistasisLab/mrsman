@@ -752,12 +752,6 @@ def addAdmission(self,record):
             }]
         }
         visit_uuid = postDict('fhir', 'encounter', visit)
-#        uuid_cur = insertPgDict(self, 'uuids', {
-#            'src': 'mimiciii.admissions',
-#            'row_id': record.row_id,
-#            'uuid': visit_uuid
-#        })
-#        uuid_cur.close()
         admission = {
             "resourceType":
             "Encounter",
@@ -833,7 +827,7 @@ def addAdmission(self,record):
              for event in admission_data['events'][events_source]:
                  addObs(events_source,event,record,admission_uuid,stay_array)
         addDiagnosis(record,admission_uuid)
-        return(visit_uuid)
+        return(admission_uuid)
         self.pg_conn.commit()
 
 
