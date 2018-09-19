@@ -61,7 +61,7 @@ class base ():
         num = int(eval(sys.argv[2]))
     except:
         num = 1
-    mrsman.bootstrap(self)
+    mrsman.getUuids(self)
     #mrsman.exitFlag = False
     src = 'kate.combined_admissions'
     task = mrsman.addRecords
@@ -77,14 +77,14 @@ class base ():
         num = int(eval(sys.argv[2]))
     except:
         num = 1
-    mrsman.bootstrap(self)
+    mrsman.getUuids(self)
     src = 'kate.combined_admissions'
     task = mrsman.getRecords
     adder = mrsman.addDiag
     mrsman.runTask(self,src,task,adder,num)
   #fhir
   def reinitPatient(self):
-    mrsman.bootstrap(self)
+    mrsman.getUuids(self)
     subject_id = sys.argv[2]
     mrsman.reloadPatient(subject_id)
     mrsman.shutdown(self)

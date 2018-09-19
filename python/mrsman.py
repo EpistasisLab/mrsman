@@ -154,10 +154,10 @@ def bootstrap(self):
     try:
         self.mysql_conn = pymysql.connect(
             user=config['MYSQL_USER'], passwd=config['MYSQL_PASS'], db=config['SISTER'])
-    except:
+    except Exception as e:
         print("unable to connect to the mysql database")
+        print(e)
         exit()
-    getUuids(self)
     return()
 
 def shutdown(self):
@@ -1420,6 +1420,7 @@ def genConceptMap(self):
     self.pg_conn.commit()
 
 def getUuids(self):
+    bootstrap(self)
     global location_array
     global caregiver_array
     global concepts_array
