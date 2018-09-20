@@ -22,7 +22,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
-numThreads = 5
+numThreads = 50
 exitFlag = False
 
 #THREADING

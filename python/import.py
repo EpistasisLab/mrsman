@@ -66,8 +66,8 @@ class base ():
     self.uuid = -1
     self.task = mrsman.addRecords
     self.adder = mrsman.addPatient
-    if (not self.num):
-       self.num = 1
+#    if (not self.num):
+#       self.num = 1
     try:
         mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
