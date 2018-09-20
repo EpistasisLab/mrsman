@@ -6,6 +6,10 @@ class base ():
     if (len(sys.argv) > 1):
         #run function from cli
         a = eval("base." + sys.argv[1])
+        try:
+            self.num = int(eval(sys.argv[2]))
+        except:
+            self.num = False
         #self.exitFlag = 0
         a(self)
     else:
@@ -19,7 +23,7 @@ class base ():
   def initDb(self):
     mrsman.bootstrap(self)
     print("initializing database")
-    mrsman.loadPgsqlFile(self,'../mimic/sql/add_tables.sql')
+#    mrsman.loadPgsqlFile(self,'../mimic/sql/add_tables.sql')
     print("import concepts")
     mrsman.conceptsToConcepts(self)
     print("link mapped concepts")
@@ -32,42 +36,46 @@ class base ():
     mrsman.bootstrap(self)
     print("add locations")
     mrsman.locationsToLocations(self)
-    print("add encounter and visit types")
+    print("add encounter types")
     mrsman.postEncounterTypes(self)
+    print("add visit types")
     mrsman.postVisitTypes(self)
+    print("close connections")
     mrsman.shutdown(self)
   #fhir
   def initCaregivers(self):
     mrsman.bootstrap(self)
-    mrsman.caregiversToPractitioners(self,None)
-    mrsman.shutdown(self)
+    self.src = 'mimiciii.caregivers'
+    self.uuid = -1
+    self.task = mrsman.addRecords
+    self.adder = mrsman.addCaregiver
+    try:
+        mrsman.runTask(self)
+    except (KeyboardInterrupt, SystemExit):
+        mrsman.exitFlag = True
   #fhir
   def initPatients(self):
+    mrsman.bootstrap(self)
+    self.getDeltaDate = True
+    self.src = 'mimiciii.patients'
+    self.task = mrsman.addRecords
+    self.adder = mrsman.addPatient
+    if (not self.num):
+       self.num = 1
     try:
-        num = int(eval(sys.argv[2]))
-    except:
-        num = 1
-    #mrsman.exitFlag = False
-    src = 'mimiciii.patients'
-    adder = 'addPatient'
-    try:
-        mrsman.runTask(num,src,adder)
+        mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
         print('\n! Received keyboard interrupt, quitting threads.\n')
         mrsman.exitFlag = True
   #fhir
   def initAdmit(self):
-    try:
-        num = int(eval(sys.argv[2]))
-    except:
-        num = 1
     mrsman.getUuids(self)
-    #mrsman.exitFlag = False
-    src = 'kate.combined_admissions'
-    task = mrsman.addRecords
-    adder = mrsman.addAdmission
+    self.getDeltaDate = True
+    self.src = 'combined_admissions'
+    self.task = mrsman.addRecords
+    self.adder = mrsman.addAdmission
     try:
-        mrsman.runTask(self,src,task,adder,num)
+        mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
         mrsman.exitFlag = True
         print('\n! Received keyboard interrupt, quitting threads.\n')
@@ -78,14 +86,14 @@ class base ():
     except:
         num = 1
     mrsman.getUuids(self)
-    src = 'kate.combined_admissions'
-    task = mrsman.getRecords
-    adder = mrsman.addDiag
-    mrsman.runTask(self,src,task,adder,num)
+    self.src = 'kate.combined_admissions'
+    self.task = mrsman.getDeltaRecords
+    self.adder = mrsman.addDiag
+    mrsman.runTask(self)
   #fhir
   def reinitPatient(self):
     mrsman.getUuids(self)
-    subject_id = sys.argv[2]
+    subject_id = self.num
     mrsman.reloadPatient(subject_id)
     mrsman.shutdown(self)
 

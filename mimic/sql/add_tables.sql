@@ -1,5 +1,5 @@
 --CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-DROP TABLE if exists uuids;
+DROP TABLE if exists uuids cascade;
 CREATE TABLE uuids
 (
   uuid uuid,
