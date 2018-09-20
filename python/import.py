@@ -50,6 +50,7 @@ class base ():
     self.uuid = -1
     self.task = mrsman.addRecords
     self.adder = mrsman.addCaregiver
+    mrsman.numThreads = 5
     if (not self.num):
        self.num = 8000 
     try:
