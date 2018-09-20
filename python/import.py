@@ -66,6 +66,7 @@ class base ():
     self.uuid = -1
     self.task = mrsman.addRecords
     self.adder = mrsman.addPatient
+    mrsman.numThreads = 5
 #    if (not self.num):
 #       self.num = 1
     try:
@@ -82,6 +83,7 @@ class base ():
     self.src = 'combined_admissions'
     self.task = mrsman.addRecords
     self.adder = mrsman.addAdmission
+    mrsman.numThreads = 20
     try:
         mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
@@ -93,7 +95,6 @@ class base ():
     mrsman.getUuids(self)
     self.deltadate = True
     self.uuid = 1
-    mrsman.numThreads = 1
     self.src = 'combined_admissions'
     self.task = mrsman.addRecords
     self.adder = mrsman.addDiag
