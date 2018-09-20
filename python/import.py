@@ -90,8 +90,9 @@ class base ():
   #fhir enchanced observations
   def genDiagnosis(self):
     mrsman.getUuids(self)
-    self.getDeltaDate = True
+    self.deltadate = True
     self.uuid = 1
+    mrsman.numThreads = 1
     self.src = 'combined_admissions'
     self.task = mrsman.addRecords
     self.adder = mrsman.addDiag

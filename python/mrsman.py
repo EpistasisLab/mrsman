@@ -791,8 +791,8 @@ def addAdmission(self,record):
         for events_source in admission_data['events']:
              for event in admission_data['events'][events_source]:
                  addObs(events_source,event,record,admission_uuid,stay_array)
-        addDiagnosis(record,visit_uuid)
-        return(visit_uuid)
+        #addDiagnosis(record,visit_uuid)
+        return(admission_uuid)
 
 
 #create a fhir observation for admission diagnosis
