@@ -22,7 +22,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
-numThreads = 30
+numThreads = 5
 exitFlag = False
 
 #THREADING
@@ -98,7 +98,56 @@ def splitTask(self):
       thread = threads[x]
       thread.join()
 
-# fetch and process records using a delta offset for patients
+#fetch mimic db records
+def getSrc(self):
+    pg_cur = openPgCursor(self)
+    limit = False
+    uuid = False
+    deltadate = False
+    Filter = {}
+    if ('limit' in dir(self) and self.limit > 0):
+        limit = str(self.limit)
+    if ('uuid' in dir(self)):
+        uuid = self.uuid
+    if ('deltadate' in dir(self)):
+        deltadate = self.deltadate
+    if ('x' in dir(self) and self.x is not False):
+        Filter.update({"MOD("+self.src+".row_id,"+ str(numThreads) +")":str(self.x)})
+    if ('filter' in dir(self) and self.filter):
+        Filter.update(self.filter)
+    stmt = "select " + self.src + ".*"
+    if (uuid == 1):
+        stmt += ",uuids.uuid"
+    if (deltadate):
+        stmt += ",deltadate.offset from " + self.src + " left join deltadate on deltadate.subject_id = " + self.src + ".subject_id"
+    else:
+        stmt += " from " + self.src
+    if(uuid == 1):
+        stmt += " left join uuids on " + self.src + ".row_id = uuids.row_id and uuids.src = '" + self.src + "'"
+    if(Filter):
+        stmt += " where "
+        fields = []
+        for col_name in Filter:
+            fields.append(col_name + " = '" + str(Filter[col_name]) + "'")
+        stmt += ' and ' .join(fields)
+        if(uuid == -1):
+          stmt +=  " and row_id not in (select row_id from uuids where src = '" + self.src + "')"
+    else:
+        if(uuid == -1):
+          stmt +=  " where row_id not in (select row_id from uuids where src = '" + self.src + "')"
+    if(limit):
+        stmt += " limit " + limit
+    try:
+        if debug:
+            print(stmt)
+        pg_cur.execute(stmt)
+        return pg_cur
+    except Exception as e:
+        print("can't select from " + self.src)
+        print(e)
+        exit()
+
+# fetch and post records, saving the uuid if it doesn't already exist
 def addRecords(self):
     cur = getSrc(self)
     success = 0
@@ -108,17 +157,18 @@ def addRecords(self):
         uuid=self.adder(child,record)
         if (uuid):
            print("added "+self.src+": " + uuid)
-           uuid_cur = insertPgDict(self,'uuids', {
-               'src': self.src,
-               'row_id': record.row_id,
-               'uuid': uuid
-           })
+           if(self.uuid == -1):
+               uuid_cur = insertPgDict(self,'uuids', {
+                   'src': self.src,
+                   'row_id': record.row_id,
+                   'uuid': uuid
+               })
+               uuid_cur.close()
            success += 1
-           self.pg_conn.commit()
-           uuid_cur.close()
         else:
-            print("no uuid for " + src + " row_id: " + str(record.row_id)) 
+            print("no uuid for " + child.src + " row_id: " + str(record.row_id)) 
     cur.close()
+    self.pg_conn.commit()
     if(success > 0):
         return(True)
     else:
@@ -135,6 +185,12 @@ def save_json(model_type,uuid,data):
         os.makedirs(directory) 
     with open(filename, 'w') as outfile:
         json.dump(data, outfile)
+
+#open a postgres cursor 
+def openPgCursor(self):
+    pg_cur = self.pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+    return(pg_cur)
+
 
 #read config file and initialize database connections
 def bootstrap(self):
@@ -162,6 +218,18 @@ def bootstrap(self):
         exit()
     return()
 
+# load uuids into memory
+def getUuids(self):
+    bootstrap(self)
+    global location_array
+    global caregiver_array
+    global concepts_array
+    location_array = getLocations(self)
+    caregiver_array = getCaregivers(self)
+    concepts_array = getConcepts(self)
+
+
+# close db connections
 def shutdown(self):
     self.pg_conn.commit()
     self.mysql_conn.commit()
@@ -176,6 +244,10 @@ def randomDate(start, end):
     etime = time.mktime(time.strptime(end, date_format))
     ptime = stime + prop * (etime - stime)
     return time.strftime(date_format, time.localtime(ptime)) + 'T00:00:00'
+
+#shift dates by offset number of hours
+def deltaDate(src_date, offset):
+    return str((src_date + relativedelta(days=-offset)).isoformat())
 
 # generate a luhn mod 30 check character 
 def luhnmod30(id_without_check):
@@ -209,63 +281,9 @@ def luhnmod30(id_without_check):
     checkdigit =  int((mod - (sum % mod)) % mod)
     return  valid_chars[checkdigit]
 
-#shift dates by offset number of hours
-def deltaDate(src_date, offset):
-    return str((src_date + relativedelta(days=-offset)).isoformat())
-
-#open a postgres cursor 
-def openPgCursor(self):
-    pg_cur = self.pg_conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
-    return(pg_cur)
 
 # DATA I/O
 #
-#load mimic records
-def getSrc(self):
-    pg_cur = openPgCursor(self)
-    limit = False
-    uuid = False
-    deltadate = False
-    Filter = {}
-    if ('limit' in dir(self) and self.limit > 0):
-        limit = str(self.limit)
-    if ('uuid' in dir(self)):
-        uuid = self.uuid
-    if ('deltadate' in dir(self)):
-        deltadate = self.deltadate
-    if ('x' in dir(self) and self.x):
-        Filter.update({"MOD("+self.src+".row_id,"+ str(numThreads) +")":str(self.x)})
-    if ('filter' in dir(self) and self.filter):
-        Filter.update(self.filter)
-    stmt = "select " + self.src + ".*"
-    if (uuid == 1):
-        stmt += ",uuids.uuid"
-    if (deltadate):
-        stmt += ",deltadate.offset from " + self.src + " left join deltadate on deltadate.subject_id = " + self.src + ".subject_id"
-    else:
-        stmt += " from " + self.src
-    if(uuid == 1):
-        stmt += " left join uuids on " + self.src + ".row_id = uuids.row_id and uuids.src = '" + self.src + "'"
-    if(uuid == -1):
-        stmt +=  " where row_id not in (select row_id from uuids where src = '" + self.src + "')"
-    if(Filter):
-        stmt += " and "
-        fields = []
-        for col_name in Filter:
-            fields.append(col_name + " = '" + str(Filter[col_name]) + "'")
-        stmt += ' and ' .join(fields)
-    if(limit):
-        stmt += " limit " + limit
-    try:
-        if debug:
-            print(stmt)
-        pg_cur.execute(stmt)
-        return pg_cur
-    except Exception as e:
-        print("can't select from " + self.src)
-        print(e)
-        exit()
-
 #get enumerated concepts
 def getConceptMap(self):
     pg_cur = openPgCursor(self)
@@ -277,48 +295,6 @@ def getConceptMap(self):
         print("can't select from " + table)
         print(e)
         exit()
-
-#load all locations into an array for easy searching
-def getLocations(self):
-    self.getExisting = True
-    self.src ='locations' 
-    cur = getSrc(self)
-    locations = {}
-    for location in cur:
-        locations[location.location] = location.uuid
-    return (locations)
-
-#load all caregivers into an array for easy searching
-def getCaregivers(self):
-    self.getExisting = True
-    self.src ='mimiciii.caregivers' 
-    cur = getSrc(self)
-    caregivers = {}
-    for caregiver in cur:
-        caregivers[caregiver.cgid] = caregiver.uuid
-    return(caregivers)
-
-#load all concepts into an array for easy searching
-def getConcepts(self):
-    self.getExisting = True
-    self.src = 'concepts' 
-    cur = getSrc(self)
-    concepts = {}
-    concepts['test_num'] = {}
-    concepts['test_text'] = {}
-    concepts['test_enum'] = {}
-    concepts['diagnosis'] = {}
-    concepts['answer'] = {}
-    concepts['category'] = {}
-    concepts['icd9_codes'] = {}
-    for concept in cur:
-        if concept.concept_type in ['test_num','test_text','test_enum']:
-            concepts[concept.concept_type][concept.itemid] = concept.uuid
-        elif concept.concept_type in ['diagnosis','answer','category']:
-            concepts[concept.concept_type][concept.shortname] = concept.uuid
-        elif concept.concept_type in ['icd_diagnosis','icd_procedure']:
-            concepts['icd9_codes'][concept.icd9_code] = concept.uuid
-    return concepts
 
 #create record in openmrs database
 def insertDict(self, table, Dict):
@@ -355,7 +331,7 @@ def setIncrementer(self, table, value):
         mysql_cur.close()
         exit()
 
-#create record in mimic database
+#update record in mimic database
 def updatePgDict(self, table, Dict, Filter):
     pg_cur = openPgCursor(self)
     placeholder = ", ".join(["%s"] * len(Dict))
@@ -379,6 +355,7 @@ def updatePgDict(self, table, Dict, Filter):
         print(Dict.values())
         print(e)
         exit()
+
 
 #create record in mimic database
 def deletePgDict(self, table, Filter):
@@ -530,6 +507,49 @@ def getAdmissionData(self, admission):
             admission_data['events'][table].append(record)
     return (admission_data)
 
+#load all locations into an array for easy searching
+def getLocations(self):
+    self.getExisting = True
+    self.src ='locations' 
+    self.uuid = 1
+    cur = getSrc(self)
+    locations = {}
+    for location in cur:
+        locations[location.location] = location.uuid
+    return (locations)
+
+#load all caregivers into an array for easy searching
+def getCaregivers(self):
+    self.getExisting = True
+    self.src ='mimiciii.caregivers' 
+    cur = getSrc(self)
+    caregivers = {}
+    for caregiver in cur:
+        caregivers[caregiver.cgid] = caregiver.uuid
+    return(caregivers)
+
+#load all concepts into an array for easy searching
+def getConcepts(self):
+    self.getExisting = True
+    self.src = 'concepts' 
+    cur = getSrc(self)
+    concepts = {}
+    concepts['test_num'] = {}
+    concepts['test_text'] = {}
+    concepts['test_enum'] = {}
+    concepts['diagnosis'] = {}
+    concepts['answer'] = {}
+    concepts['category'] = {}
+    concepts['icd9_codes'] = {}
+    for concept in cur:
+        if concept.concept_type in ['test_num','test_text','test_enum']:
+            concepts[concept.concept_type][concept.itemid] = concept.uuid
+        elif concept.concept_type in ['diagnosis','answer','category']:
+            concepts[concept.concept_type][concept.shortname] = concept.uuid
+        elif concept.concept_type in ['icd_diagnosis','icd_procedure']:
+            concepts['icd9_codes'][concept.icd9_code] = concept.uuid
+    return concepts
+
 #MODEL MANIPULATION
 #
 # insert visit type records into encountertypes table in openmrs db
@@ -580,46 +600,37 @@ def addCaregiver(self,record):
     uuid = postDict('fhir', 'practitioner', caregiver)
     return(uuid)
 
-
 # delete then load a patient to openmrs fhir interface
-def reloadPatient(self, subject_id):
-    self = copy.copy(self)
-    self.x = False
-    self.src = 'mimiciii.patients'
-    self.dict = {'subject_id':subject_id}
-    self.uuid = True
-    self.delta = True
-    patient_cur = getSrc(self)
+def deletePatient(self,subject_id):
+    patient = copy.copy(self)
+    patient.x = False
+    patient.filter = {'subject_id':subject_id}
+    admission = copy.copy(patient)
+    patient.src = 'mimiciii.patients'
+    patient.uuid = 1
+    patient_cur = getSrc(patient)
     for record in patient_cur:
         if(record.uuid):
+            print("delete patient: " + record.uuid)
+            print(record)
             #remove old uuid
             delDict('fhir','patient', record.uuid)
-        #create a new fhir patient and save the new uuid
-        uuid=addPatient(self,record)
-        if(uuid):
-           print("added patient: " + uuid)
-           uuid_cur = updatePgDict(self, 'uuids', {
-               'src': src,
-               'row_id': record.row_id,
-               'uuid': uuid
-           },{
-               'uuid': record.uuid
-           })
-           uuid_cur.close()
-        else:
-            print("no uuid for " + src + " row_id: " + str(record.row_id)) 
-    #delete admissions from uuids table
-    admit_cur = getSrcFilter(self,'mimiciii.admissions',{
-        'subject_id':subject_id
-    })
-    for record in admit_cur:
-        print(record.row_id)
-        deletePgDict(self, 'uuids',{
-            'src':'mimiciii.admissions',
-            'row_id':record.row_id
+        uuid_cur = deletePgDict(patient, 'uuids', {
+           'src': patient.src,
+           'row_id': record.row_id,
         })
-    self.pg_conn.commit()
+        uuid_cur.close()
+    #delete admissions from uuids table
     patient_cur.close()
+    admission.src = 'mimiciii.admissions'
+    admission_cur = getSrc(admission)
+    for record in admission_cur:
+#            deletePgDict(admission, 'uuids',{
+#                'src':admission.src,
+#                'row_id':record.row_id
+#            })
+        print(record)
+    self.pg_conn.commit()
 
 def addPatient(self,record):
     gender = {"M": "male", "F": "female"}[record.gender]
@@ -770,12 +781,18 @@ def addAdmission(self,record):
                 }
             }
             icuenc_uuid = postDict('fhir', 'encounter', icuenc)
+            icuuuid_cur = insertPgDict(self,'uuids', {
+               'src': 'icustays',
+               'row_id': icustay.row_id,
+               'uuid': icuenc_uuid
+            })
+            icuuuid_cur.close()
             stay_array[icustay.icustay_id] = icuenc_uuid
         for events_source in admission_data['events']:
              for event in admission_data['events'][events_source]:
                  addObs(events_source,event,record,admission_uuid,stay_array)
-        addDiagnosis(record,admission_uuid)
-        return(admission_uuid)
+        addDiagnosis(record,visit_uuid)
+        return(visit_uuid)
 
 
 #create a fhir observation for admission diagnosis
@@ -888,10 +905,6 @@ def addDiagnosis(admission,encounter_uuid):
         "resourceType": "Observation",
         "code": {
             "coding": [
-#                {
-#                    "system": "org.openmrs.module.emrapi",
-#                    "code": "Diagnosis Certainty"
-#                },
                 {
                     "system": "http://openmrs.org",
                     "code": "159394AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -905,17 +918,8 @@ def addDiagnosis(admission,encounter_uuid):
             "reference": "Encounter/" + encounter_uuid,
         },
         "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
-#        "performer": [
-#            {
-#                "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
-#            }
-#        ],
         "valueCodeableConcept": {
            "coding": [
-#                {
-#                    "system": "org.openmrs.module.emrapi",
-#                    "code": "Presumed"
-#                },
                 {
                     "system": "http://openmrs.org",
                     "code": "159393AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -928,10 +932,6 @@ def addDiagnosis(admission,encounter_uuid):
         "status": "final",
         "code": {
             "coding": [
-#                {
-#                    "system": "org.openmrs.module.emrapi",
-#                    "code": "Non-Coded Diagnosis"
-#                },
                 {
                     "system": "http://openmrs.org",
                     "code": "161602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -944,13 +944,7 @@ def addDiagnosis(admission,encounter_uuid):
         "context": {
             "reference": "Encounter/" + encounter_uuid,
         },
-#        "effectiveDateTime":  deltaDate(record.admittime,record.offset)
         "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
-#        "performer": [
-#            {
-#                "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
-#            }
-#        ],
         "valueString": admission.diagnosis
     }
     order_json = {
@@ -958,10 +952,6 @@ def addDiagnosis(admission,encounter_uuid):
         "status": "final",
         "code": {
             "coding": [
-#                {
-#                    "system": "org.openmrs.module.emrapi",
-#                    "code": "Diagnosis Order"
-#                },
                 {
                     "system": "http://openmrs.org",
                     "code": "159946AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -975,17 +965,8 @@ def addDiagnosis(admission,encounter_uuid):
             "reference": "Encounter/" + encounter_uuid,
         },
         "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
-#        "performer": [
-#            {
-#                "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
-#            }
-#        ],
         "valueCodeableConcept": {
             "coding": [
-#                {
-#                    "system": "org.openmrs.module.emrapi",
-#                    "code": "Primary"
-#                },
                 {
                     "system": "http://openmrs.org",
                     "code": "159943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -996,8 +977,6 @@ def addDiagnosis(admission,encounter_uuid):
     order_uuid = postDict('fhir', 'observation', order_json)
     diagnosis_uuid = postDict('fhir','observation',diagnosis_json)
     certainty_uuid = postDict('fhir','observation',certainty_json)
-#    print(certainty_json)
-#    print(certainty_uuid)
     obsgroup_json = {
         "resourceType": "Observation",
         "code": {
@@ -1013,11 +992,6 @@ def addDiagnosis(admission,encounter_uuid):
             "reference": "Encounter/" + encounter_uuid,
         },
         "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
-        #"performer": [
-        #    {
-        #    "reference": "Practitioner/4d7730cc-d355-4d3a-806c-86e0038cf5e7",
-        #    }
-        #],
         "valueString": '',
         "related": [
             {
@@ -1044,7 +1018,22 @@ def addDiagnosis(admission,encounter_uuid):
     print(obsgroup_json)
     print(obsgroup_uuid)
 
-#    save_json('diagnosis',obsgroup_uuid,[certainty_json,diagnosis_json,order_json,obsgroup_json])
+# link enumerated concepts to their parent concepts
+def genConceptMap(self):
+    concept_cur = getConceptMap(self)
+    for record in concept_cur:
+        date = time.strftime('%Y-%m-%d %H:%M:%S')
+        concept_uuid = str(uuid.uuid4())
+        concept_answer = {
+                "concept_id": record.parent_id,
+                "answer_concept": record.child_id,
+                "date_created": date,
+                "creator": "1",
+                "uuid": concept_uuid
+        }
+        insertDict(self,'concept_answer',concept_answer);
+    concept_cur.close()
+    self.pg_conn.commit()
 
 # post locations to openmrs fhir interface
 def locationsToLocations(self):
@@ -1202,29 +1191,3 @@ def conceptsToConcepts(self):
     setIncrementer(self, 'concept_name','21')
     setIncrementer(self, 'concept_description','1')
     self.pg_conn.commit()
-
-# link enumerated concepts to their parent concepts
-def genConceptMap(self):
-    concept_cur = getConceptMap(self)
-    for record in concept_cur:
-        date = time.strftime('%Y-%m-%d %H:%M:%S')
-        concept_uuid = str(uuid.uuid4())
-        concept_answer = {
-                "concept_id": record.parent_id,
-                "answer_concept": record.child_id,
-                "date_created": date,
-                "creator": "1",
-                "uuid": concept_uuid
-        }
-        insertDict(self,'concept_answer',concept_answer);
-    concept_cur.close()
-    self.pg_conn.commit()
-
-def getUuids(self):
-    bootstrap(self)
-    global location_array
-    global caregiver_array
-    global concepts_array
-    location_array = getLocations(self)
-    caregiver_array = getCaregivers(self)
-    concepts_array = getConcepts(self)

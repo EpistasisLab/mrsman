@@ -23,7 +23,7 @@ class base ():
   def initDb(self):
     mrsman.bootstrap(self)
     print("initializing database")
-#    mrsman.loadPgsqlFile(self,'../mimic/sql/add_tables.sql')
+    mrsman.loadPgsqlFile(self,'../mimic/sql/add_tables.sql')
     print("import concepts")
     mrsman.conceptsToConcepts(self)
     print("link mapped concepts")
@@ -42,22 +42,27 @@ class base ():
     mrsman.postVisitTypes(self)
     print("close connections")
     mrsman.shutdown(self)
-  #fhir
+  #
+  #fhir based practitioners
   def initCaregivers(self):
     mrsman.bootstrap(self)
     self.src = 'mimiciii.caregivers'
     self.uuid = -1
     self.task = mrsman.addRecords
     self.adder = mrsman.addCaregiver
+    if (not self.num):
+       self.num = 8000 
     try:
         mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
         mrsman.exitFlag = True
-  #fhir
+  #
+  #fhir based patients
   def initPatients(self):
     mrsman.bootstrap(self)
-    self.getDeltaDate = True
+    self.deltadate = True
     self.src = 'mimiciii.patients'
+    self.uuid = -1
     self.task = mrsman.addRecords
     self.adder = mrsman.addPatient
     if (not self.num):
@@ -67,10 +72,12 @@ class base ():
     except (KeyboardInterrupt, SystemExit):
         print('\n! Received keyboard interrupt, quitting threads.\n')
         mrsman.exitFlag = True
-  #fhir
+  #
+  #fhir based admissions
   def initAdmit(self):
     mrsman.getUuids(self)
-    self.getDeltaDate = True
+    self.deltadate = True
+    self.uuid = -1
     self.src = 'combined_admissions'
     self.task = mrsman.addRecords
     self.adder = mrsman.addAdmission
@@ -79,22 +86,22 @@ class base ():
     except (KeyboardInterrupt, SystemExit):
         mrsman.exitFlag = True
         print('\n! Received keyboard interrupt, quitting threads.\n')
-  #fhir
+  #
+  #fhir enchanced observations
   def genDiagnosis(self):
-    try:
-        num = int(eval(sys.argv[2]))
-    except:
-        num = 1
     mrsman.getUuids(self)
-    self.src = 'kate.combined_admissions'
-    self.task = mrsman.getDeltaRecords
+    self.getDeltaDate = True
+    self.uuid = 1
+    self.src = 'combined_admissions'
+    self.task = mrsman.addRecords
     self.adder = mrsman.addDiag
     mrsman.runTask(self)
-  #fhir
+  #
+  #fhir delete a patient 
   def reinitPatient(self):
     mrsman.getUuids(self)
     subject_id = self.num
-    mrsman.reloadPatient(subject_id)
+    mrsman.deletePatient(self,subject_id)
     mrsman.shutdown(self)
 
 base()
