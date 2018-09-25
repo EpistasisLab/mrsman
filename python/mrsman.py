@@ -135,11 +135,13 @@ def getSrc(self):
     else:
         if(uuid == -1):
           stmt +=  " where row_id not in (select row_id from uuids where src = '" + self.src + "')"
+        if(uuid == 1):
+          stmt +=  " where uuid is not null"
     if(limit):
         stmt += " limit " + limit
+    if debug:
+        print(stmt)
     try:
-        if debug:
-            print(stmt)
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
@@ -165,7 +167,8 @@ def addRecords(self):
                })
                uuid_cur.close()
            success += 1
-        else:
+           self.pg_conn.commit()
+        elif (self.uuid == -1):
             print("no uuid for " + child.src + " row_id: " + str(record.row_id)) 
     cur.close()
     self.pg_conn.commit()
@@ -302,9 +305,9 @@ def insertDict(self, table, Dict):
     mysql_cur = self.mysql_conn.cursor()
     stmt = "insert into `{table}` ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
+    if debug:
+        print(stmt)
     try:
-        if debug:
-            print(stmt)
         mysql_cur.execute(stmt, list(Dict.values()))
         rowid = mysql_cur.lastrowid
         mysql_cur.close()
@@ -344,9 +347,9 @@ def updatePgDict(self, table, Dict, Filter):
         for col_name in Filter:
              fields.append(col_name + " = '" + str(Filter[col_name]) + "'")
         stmt += ' and ' .join(fields)
+    if debug:
+        print(stmt)
     try:
-        if debug:
-            print(stmt)
         pg_cur.execute(stmt, list(Dict.values()))
         return pg_cur
     except Exception as e:
@@ -383,10 +386,10 @@ def insertPgDict(self,table, Dict):
     placeholder = ", ".join(["%s"] * len(Dict))
     stmt = "insert into {table} ({columns}) values ({values});".format(
         table=table, columns=",".join(Dict.keys()), values=placeholder)
+    if debug:
+        print(stmt)
+        print(Dict)
     try:
-        if debug:
-            print(stmt)
-            print(Dict)
         pg_cur.execute(stmt, list(Dict.values()))
         return pg_cur
     except Exception as e:
@@ -791,13 +794,13 @@ def addAdmission(self,record):
         for events_source in admission_data['events']:
              for event in admission_data['events'][events_source]:
                  addObs(events_source,event,record,admission_uuid,stay_array)
-        #addDiagnosis(record,visit_uuid)
         return(admission_uuid)
 
 
 #create a fhir observation for admission diagnosis
 def addDiag(self,admission):
-    addDiagnosis(admission,admission.uuid)
+    print(admission)
+    #addDiagnosis(admission,admission.uuid)
 
 #create a fhir observation for a mimic event
 def addObs(obs_type,obs,admission,encounter_uuid,stay_array):

@@ -46,7 +46,7 @@ class base ():
   #fhir based practitioners
   def initCaregivers(self):
     mrsman.bootstrap(self)
-    self.src = 'mimiciii.caregivers'
+    self.src = 'caregivers'
     self.uuid = -1
     self.task = mrsman.addRecords
     self.adder = mrsman.addCaregiver
@@ -62,7 +62,7 @@ class base ():
   def initPatients(self):
     mrsman.bootstrap(self)
     self.deltadate = True
-    self.src = 'mimiciii.patients'
+    self.src = 'patients'
     self.uuid = -1
     self.task = mrsman.addRecords
     self.adder = mrsman.addPatient
