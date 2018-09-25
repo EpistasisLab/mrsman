@@ -109,14 +109,13 @@ class base ():
     mrsman.shutdown(self)
 
 
-  def initTen(self):
+  def initPatientsAdmit(self):
     mrsman.getUuids(self)
     self.deltadate = True
     self.task = mrsman.addRecords
     self.uuid = -1
     patients = copy.copy(self)
     admissions = copy.copy(self)
-    patients.num = 10
     patients.src = 'patients'
     patients.adder = mrsman.addPatient
     mrsman.numThreads = 5
@@ -124,6 +123,7 @@ class base ():
     admissions.src = 'combined_admissions'
     admissions.task = mrsman.addRecords
     admissions.adder = mrsman.addAdmission
+    admissions.num = False
     mrsman.numThreads = 20
     mrsman.runTask(admissions)
 
