@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
-import mrsman;
+import mrsman
+import copy
 class base ():
   def __init__(self):
     if (len(sys.argv) > 1):
@@ -106,5 +107,24 @@ class base ():
     subject_id = self.num
     mrsman.deletePatient(self,subject_id)
     mrsman.shutdown(self)
+
+
+  def initTen(self):
+    mrsman.getUuids(self)
+    self.deltadate = True
+    self.task = mrsman.addRecords
+    self.uuid = -1
+    patients = copy.copy(self)
+    admissions = copy.copy(self)
+    patients.num = 10
+    patients.src = 'patients'
+    patients.adder = mrsman.addPatient
+    mrsman.numThreads = 5
+    mrsman.runTask(patients)
+    admissions.src = 'combined_admissions'
+    admissions.task = mrsman.addRecords
+    admissions.adder = mrsman.addAdmission
+    mrsman.numThreads = 20
+    mrsman.runTask(admissions)
 
 base()
