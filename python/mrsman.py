@@ -794,13 +794,13 @@ def addAdmission(self,record):
         for events_source in admission_data['events']:
              for event in admission_data['events'][events_source]:
                  addObs(events_source,event,record,admission_uuid,stay_array)
-        return(admission_uuid)
+        return(visit_uuid)
 
 
 #create a fhir observation for admission diagnosis
 def addDiag(self,admission):
     print(admission)
-    #addDiagnosis(admission,admission.uuid)
+    addDiagnosis(admission,admission.uuid)
 
 #create a fhir observation for a mimic event
 def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
@@ -903,7 +903,38 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
         print([obs_type,concept_uuid,value_type,value,units,date,obs.row_id])
         return(None)
 
-def addDiagnosis(admission,encounter_uuid):
+def addDiagnosis(admission,visit_uuid):
+    note = {
+        "resourceType":
+        "Encounter",
+        "status":
+        "finished",
+        "type": [{
+            "coding": [{
+                "display": "Visit Note"
+            }]
+        }],
+        "subject": {
+            "id": admission.patient_uuid,
+        },
+        "period": {
+            "start": deltaDate(admission.admittime, admission.offset),
+            "end": deltaDate(admission.dischtime, admission.offset)
+        },
+#        "location": [{
+#            "location": {
+#                "reference": "Location/" + admission.admission_location_uuid,
+#            },
+#            "period": {
+#                "start": deltaDate(admission.admittime, admission.offset),
+#                "end": deltaDate(admission.dischtime, admission.offset)
+#            }
+#        }],
+        "partOf": {
+            "reference": "Encounter/" + visit_uuid,
+        }
+    }
+    encounter_uuid = postDict('fhir', 'encounter', note)
     certainty_json = {
         "resourceType": "Observation",
         "code": {
@@ -914,6 +945,11 @@ def addDiagnosis(admission,encounter_uuid):
                 }
             ]
         },
+        "performer": [
+            {
+                "reference": "Practitioner/ef503d24-800b-431f-8ebd-799b8018cc8b",
+            }
+        ],
         "subject": {
             "id": admission.patient_uuid,
         },
@@ -941,6 +977,11 @@ def addDiagnosis(admission,encounter_uuid):
                 }
             ]
         },
+        "performer": [
+            {
+                "reference": "Practitioner/ef503d24-800b-431f-8ebd-799b8018cc8b",
+            }
+        ],
         "subject": {
             "id": admission.patient_uuid,
         },
@@ -961,6 +1002,11 @@ def addDiagnosis(admission,encounter_uuid):
                 }
             ]
         },
+        "performer": [
+            {
+                "reference": "Practitioner/ef503d24-800b-431f-8ebd-799b8018cc8b",
+            }
+        ],
         "subject": {
             "id": admission.patient_uuid,
         },
@@ -988,6 +1034,11 @@ def addDiagnosis(admission,encounter_uuid):
                     "code": "159947AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             }]
         },
+        "performer": [
+            {
+                "reference": "Practitioner/ef503d24-800b-431f-8ebd-799b8018cc8b",
+            }
+        ],
         "subject": {
             "id": admission.patient_uuid,
         },

@@ -99,6 +99,9 @@ class base ():
     self.src = 'combined_admissions'
     self.task = mrsman.addRecords
     self.adder = mrsman.addDiag
+    if(self.num):
+        self.filter = {'hadm_id':self.num}
+    self.num = False
     mrsman.runTask(self)
   #
   #fhir delete a patient 
