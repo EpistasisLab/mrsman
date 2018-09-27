@@ -20,7 +20,7 @@ import os
 import copy
 from datetime import date
 from dateutil.relativedelta import relativedelta
-debug = False
+debug = True
 use_omrsnum = False
 numThreads = 1
 exitFlag = False
@@ -485,6 +485,7 @@ def getAdmissions(self, limit):
 
 # load data from admission related tables
 def getAdmissionData(self, admission):
+    self.limit = False
     self.filter =  {'hadm_id': admission.hadm_id}
     events_tables = [
         'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
@@ -682,7 +683,8 @@ def addPatient(self,record):
 def addAdmission(self,record):
         stay_array={}
         print("processing admission: " + str(record.hadm_id))
-        admission_data = getAdmissionData(self, record)
+        child = copy.copy(self) 
+        admission_data = getAdmissionData(child, record)
         # each admission generates a grandparent (visit encounter)
         # a parent (admission encounter)
         # and one or more icustay encounters
@@ -784,7 +786,7 @@ def addAdmission(self,record):
                 }
             }
             icuenc_uuid = postDict('fhir', 'encounter', icuenc)
-            icuuuid_cur = insertPgDict(self,'uuids', {
+            icuuuid_cur = insertPgDict(child,'uuids', {
                'src': 'icustays',
                'row_id': icustay.row_id,
                'uuid': icuenc_uuid
