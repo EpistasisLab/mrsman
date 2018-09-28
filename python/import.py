@@ -81,7 +81,7 @@ class base ():
     mrsman.getUuids(self)
     self.deltadate = True
     self.uuid = -1
-    self.src = 'combined_admissions'
+    self.src = 'visits'
     self.task = mrsman.addRecords
     self.adder = mrsman.addAdmission
     mrsman.numThreads = 20
@@ -96,7 +96,7 @@ class base ():
     mrsman.getUuids(self)
     self.deltadate = True
     self.uuid = 1
-    self.src = 'combined_admissions'
+    self.src = 'visits'
     self.task = mrsman.addRecords
     self.adder = mrsman.addDiag
     if(self.num):
@@ -123,7 +123,7 @@ class base ():
     patients.adder = mrsman.addPatient
     mrsman.numThreads = 5
     mrsman.runTask(patients)
-    admissions.src = 'combined_admissions'
+    admissions.src = 'visits'
     admissions.task = mrsman.addRecords
     admissions.adder = mrsman.addAdmission
     admissions.num = False

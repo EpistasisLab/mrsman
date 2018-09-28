@@ -20,7 +20,7 @@ import os
 import copy
 from datetime import date
 from dateutil.relativedelta import relativedelta
-debug = True
+debug = False
 use_omrsnum = False
 numThreads = 1
 exitFlag = False
@@ -487,11 +487,6 @@ def getAdmissions(self, limit):
 def getAdmissionData(self, admission):
     self.limit = False
     self.filter =  {'hadm_id': admission.hadm_id}
-    events_tables = [
-        'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
-        'inputevents_mv','labevents','microbiologyevents','noteevents',
-        'outputevents','procedureevents_mv','procedures_icd'
-    ]
     tables = [
         'callout','diagnoses_icd','drgcodes','icustays','prescriptions',
         'services','transfers']
@@ -502,6 +497,18 @@ def getAdmissionData(self, admission):
         cur = getSrc(self)
         for record in cur:
             admission_data[table].append(record)
+    return (admission_data)
+
+# load data from admission related tables
+def getAdmissionEvents(self, admission):
+    self.limit = False
+    self.filter =  {'hadm_id': admission.hadm_id}
+    events_tables = [
+        'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
+        'inputevents_mv','labevents','microbiologyevents','noteevents',
+        'outputevents','procedureevents_mv','procedures_icd'
+    ]
+    admission_data = {}
     admission_data['events'] = {}
     for table in events_tables:
         admission_data['events'][table] = []
@@ -747,7 +754,11 @@ def addAdmission(self,record):
             }
         }
         admission_uuid = postDict('fhir', 'encounter', admission)
-        #save_json('Encounter',admission_uuid,admission)
+        admission_cur = insertPgDict(child,'uuids', {
+           'src': 'admissions',
+           'row_id': record.row_id,
+           'uuid': admission_uuid
+        })
         if (admission_uuid == False):
             return(False)
         for icustay in admission_data['icustays']:
@@ -792,10 +803,10 @@ def addAdmission(self,record):
                'uuid': icuenc_uuid
             })
             icuuuid_cur.close()
-            stay_array[icustay.icustay_id] = icuenc_uuid
-        for events_source in admission_data['events']:
-             for event in admission_data['events'][events_source]:
-                 addObs(events_source,event,record,admission_uuid,stay_array)
+#            stay_array[icustay.icustay_id] = icuenc_uuid
+#        for events_source in admission_data['events']:
+#             for event in admission_data['events'][events_source]:
+#                 addObs(events_source,event,record,admission_uuid,stay_array)
         return(visit_uuid)
 
 
