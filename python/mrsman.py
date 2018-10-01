@@ -402,6 +402,7 @@ def loadPgsqlFile(self,filename):
     pg_cur = openPgCursor(self)
     #pg_cur = pg_conn.cursor()
     try:
+        pg_cur.execute("SET search_path TO " + config['SISTER'])
         pg_cur.execute(open(filename, "r").read())
         self.pg_conn.commit()
         return pg_cur
@@ -934,15 +935,15 @@ def addDiagnosis(admission,visit_uuid):
             "start": deltaDate(admission.admittime, admission.offset),
             "end": deltaDate(admission.dischtime, admission.offset)
         },
-#        "location": [{
-#            "location": {
-#                "reference": "Location/" + admission.admission_location_uuid,
-#            },
-#            "period": {
-#                "start": deltaDate(admission.admittime, admission.offset),
-#                "end": deltaDate(admission.dischtime, admission.offset)
-#            }
-#        }],
+        "location": [{
+            "location": {
+                "reference": "Location/" + admission.admission_location_uuid,
+            },
+            "period": {
+                "start": deltaDate(admission.admittime, admission.offset),
+                "end": deltaDate(admission.dischtime, admission.offset)
+            }
+        }],
         "partOf": {
             "reference": "Encounter/" + visit_uuid,
         }
