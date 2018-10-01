@@ -104,6 +104,20 @@ class base ():
     self.num = False
     mrsman.runTask(self)
   #
+  def genEvents(self):
+    mrsman.getUuids(self)
+    self.deltadate = True
+    self.uuid = 1
+    self.src = 'visits'
+    self.task = mrsman.addRecords
+    self.adder = mrsman.addAdmissionEvents
+    mrsman.numThreads = 20
+    if(self.num):
+        self.filter = {'hadm_id':self.num}
+    self.num = False
+    mrsman.runTask(self)
+
+  #
   #fhir delete a patient 
   def reinitPatient(self):
     mrsman.getUuids(self)

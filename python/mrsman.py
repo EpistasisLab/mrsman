@@ -224,9 +224,11 @@ def bootstrap(self):
 # load uuids into memory
 def getUuids(self):
     bootstrap(self)
+    global icustays_array
     global location_array
     global caregiver_array
     global concepts_array
+    icustays_array = getIcustays(self)
     location_array = getLocations(self)
     caregiver_array = getCaregivers(self)
     concepts_array = getConcepts(self)
@@ -473,7 +475,7 @@ def delDict(endpoint, table, uuid):
 #load not-yet-imported admissions records for imported patients
 def getAdmissions(self, limit):
     pg_cur = openPgCursor(self)
-    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,diagnosis,edregtime,edouttime,deltadate.offset from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'mimiciii.patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'mimiciii.admissions')"
+    stmt = "select hadm_id,a.row_id,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,admittime,dischtime,admission_type,visittypes.row_id visit_type_code,admission_location,discharge_location,diagnosis,edregtime,edouttime,deltadate.offset from admissions a left join (select uuid patient_uuid,patients.* from patients left join uuids on patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' left join deltadate on deltadate.subject_id = p.subject_id where patient_uuid is not null and a.row_id not in (select row_id from uuids where src = 'admissions')"
     if (limit):
         stmt += " limit " + limit
     try:
@@ -494,7 +496,7 @@ def getAdmissionData(self, admission):
     admission_data = {}
     for table in tables:
         admission_data[table] = []
-        self.src = 'mimiciii.' + table
+        self.src = table
         cur = getSrc(self)
         for record in cur:
             admission_data[table].append(record)
@@ -502,22 +504,23 @@ def getAdmissionData(self, admission):
 
 # load data from admission related tables
 def getAdmissionEvents(self, admission):
-    self.limit = False
-    self.filter =  {'hadm_id': admission.hadm_id}
+    child = copy.copy(self)
+    child.uuid = -1
+    child.limit = False
+    child.filter =  {'hadm_id': admission.hadm_id}
     events_tables = [
         'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
         'inputevents_mv','labevents','microbiologyevents','noteevents',
         'outputevents','procedureevents_mv','procedures_icd'
     ]
-    admission_data = {}
-    admission_data['events'] = {}
+    admission_events = {}
     for table in events_tables:
-        admission_data['events'][table] = []
-        self.src = 'mimiciii.' + table
-        cur = getSrc(self)
+        admission_events[table] = []
+        child.src = table
+        cur = getSrc(child)
         for record in cur:
-            admission_data['events'][table].append(record)
-    return (admission_data)
+            admission_events[table].append(record)
+    return (admission_events)
 
 #load all locations into an array for easy searching
 def getLocations(self):
@@ -530,10 +533,21 @@ def getLocations(self):
         locations[location.location] = location.uuid
     return (locations)
 
+#load all icustays into an array for easy searching
+def getIcustays(self):
+    self.getExisting = True
+    self.src ='icustays' 
+    self.uuid = 1
+    cur = getSrc(self)
+    icustays = {}
+    for icustay in cur:
+        icustays[icustay.icustay_id] = icustay.uuid
+    return (icustays)
+
 #load all caregivers into an array for easy searching
 def getCaregivers(self):
     self.getExisting = True
-    self.src ='mimiciii.caregivers' 
+    self.src ='caregivers' 
     cur = getSrc(self)
     caregivers = {}
     for caregiver in cur:
@@ -592,7 +606,7 @@ def visittypestoVisitTypes(self):
 
 # post practitioners to openmrs fhir interface
 def addCaregiver(self,record):
-    #self.src = 'mimiciii.caregivers'
+    #self.src = 'caregivers'
     #concept_cur = getSrc(self, limit)
     birthdate = randomDate("1900-01-01", "2000-01-01")
     gender = random.choice(['male', 'female'])
@@ -618,7 +632,7 @@ def deletePatient(self,subject_id):
     patient.x = False
     patient.filter = {'subject_id':subject_id}
     admission = copy.copy(patient)
-    patient.src = 'mimiciii.patients'
+    patient.src = 'patients'
     patient.uuid = 1
     patient_cur = getSrc(patient)
     for record in patient_cur:
@@ -634,7 +648,7 @@ def deletePatient(self,subject_id):
         uuid_cur.close()
     #delete admissions from uuids table
     patient_cur.close()
-    admission.src = 'mimiciii.admissions'
+    admission.src = 'admissions'
     admission_cur = getSrc(admission)
     for record in admission_cur:
 #            deletePgDict(admission, 'uuids',{
@@ -686,6 +700,25 @@ def addPatient(self,record):
     uuid = postDict('fhir', 'patient', patient)
     return(uuid)
 
+def addAdmissionEvents(self, admission):
+    admission_events = getAdmissionEvents(self, admission)
+    #print(admission)
+    for table in admission_events:
+        for event in admission_events[table]:
+            try:
+                encounter_uuid = icustays_array[event.icustay_id]
+            except Exception:
+                encounter_uuid = admission.uuid
+                pass
+            try:
+                itemid = event.itemid
+            except Exception:
+                itemid = False
+                pass
+            if(itemid == 917 and table == 'chartevents' and event.value):
+                addDiagnosis(admission,event,admission.uuid)
+            else:
+                addObs(self,table,event,admission,encounter_uuid)
 
 # post admissions to openmrs fhir encounters interface
 def addAdmission(self,record):
@@ -767,7 +800,6 @@ def addAdmission(self,record):
                 outtime = icustay.intime
             else:
                 outtime = icustay.outtime
-            print(icustay)
             print("processing stay: " + str(icustay.icustay_id))
             icuenc = {
                 "resourceType": "Encounter",
@@ -817,7 +849,7 @@ def addDiag(self,admission):
     addDiagnosis(admission,admission.uuid)
 
 #create a fhir observation for a mimic event
-def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
+def addObs(self,obs_type,obs,admission,encounter_uuid):
     value = False
     units = False
     date = False
@@ -879,11 +911,6 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
                 date = obs.chartdate
         except Exception:
             pass
-    try:
-        if(obs.icustay_id):
-            encounter_uuid = stay_array[obs.icustay_id]
-    except Exception:
-        pass
     if(concept_uuid and value and value_type):
         observation = {
             "resourceType": "Observation",
@@ -911,13 +938,19 @@ def addObs(obs_type,obs,admission,encounter_uuid,stay_array):
         elif(value_type == 'text'):
             observation["valueString"] = value
         observation_uuid = postDict('fhir', 'observation', observation)
+        observation_cur = insertPgDict(self,'uuids', {
+           'src': obs_type,
+           'row_id': obs.row_id,
+           'uuid': observation_uuid
+        })
+        self.pg_conn.commit()
         return(observation_uuid)
     else:
         print('skipping:')
         print([obs_type,concept_uuid,value_type,value,units,date,obs.row_id])
         return(None)
 
-def addDiagnosis(admission,visit_uuid):
+def addDiagnosis(admission,event,visit_uuid):
     note = {
         "resourceType":
         "Encounter",
@@ -970,7 +1003,7 @@ def addDiagnosis(admission,visit_uuid):
         "context": {
             "reference": "Encounter/" + encounter_uuid,
         },
-        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
+        "effectiveDateTime":  deltaDate(event.charttime,admission.offset),
         "valueCodeableConcept": {
            "coding": [
                 {
@@ -1002,8 +1035,8 @@ def addDiagnosis(admission,visit_uuid):
         "context": {
             "reference": "Encounter/" + encounter_uuid,
         },
-        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
-        "valueString": admission.diagnosis
+        "effectiveDateTime":  deltaDate(event.charttime,admission.offset),
+        "valueString": event.value 
     }
     order_json = {
         "resourceType": "Observation",
@@ -1027,7 +1060,7 @@ def addDiagnosis(admission,visit_uuid):
         "context": {
             "reference": "Encounter/" + encounter_uuid,
         },
-        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
+        "effectiveDateTime":  deltaDate(event.charttime,admission.offset),
         "valueCodeableConcept": {
             "coding": [
                 {
@@ -1059,7 +1092,7 @@ def addDiagnosis(admission,visit_uuid):
         "context": {
             "reference": "Encounter/" + encounter_uuid,
         },
-        "effectiveDateTime":  deltaDate(admission.admittime,admission.offset),
+        "effectiveDateTime":  deltaDate(event.charttime,admission.offset),
         "valueString": '',
         "related": [
             {
