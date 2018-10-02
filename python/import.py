@@ -111,7 +111,7 @@ class base ():
     self.src = 'visits'
     self.task = mrsman.addRecords
     self.adder = mrsman.addAdmissionEvents
-    mrsman.numThreads = 100
+    mrsman.numThreads = 50
     if(self.num):
         self.filter = {'hadm_id':self.num}
     self.num = False

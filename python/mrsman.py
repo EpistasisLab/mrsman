@@ -737,10 +737,12 @@ def addAdmissionEvents(self, admission):
                 pass
             if(table == 'chartevents'):
                 if(itemid == 917 and event.value):
-                    addDiagnosis(admission,event)
+                    addDiagnosis(admission,event,admission.uuid)
                 elif((event.itemid == 220045 or event.itemid == 211) and event.valuenum):
                     addObs(self,table,event,admission,encounter_uuid)
             elif(table == 'noteevents' and event.category == 'Discharge summary'):
+                print('encounter_uuid');
+                print(encounter_uuid);
                 addObs(self,table,event,admission,encounter_uuid)
 
 # post admissions to openmrs fhir encounters interface
@@ -967,7 +969,7 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
         print([obs_type,concept_uuid,value_type,value,units,date,obs.row_id])
         return(None)
 
-def addDiagnosis(admission,event):
+def addDiagnosis(admission,event,encounter_uuid):
     try:
         cguuid = caregivers_array[event.cgid]
     except Exception:
@@ -999,13 +1001,13 @@ def addDiagnosis(admission,event):
             }
         }],
         "partOf": {
-            "reference": "Encounter/" + admission.uuid,
+            "reference": "Encounter/" + encounter_uuid,
         },
-        "participant": {
-            "individual": {
-            "reference": "Practitioner/" + cguuid,
-            }
-        }
+    #    "participant": [{
+    #        "individual": {
+    #        "reference": "Practitioner/" + cguuid,
+    #    }
+    #    }]
     }
     encounter_uuid = postDict('fhir', 'encounter', note)
     certainty_json = {
