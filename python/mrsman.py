@@ -23,6 +23,7 @@ from dateutil.relativedelta import relativedelta
 debug = False
 use_omrsnum = False
 numThreads = 1
+saveFiles = True
 exitFlag = False
 
 #THREADING
@@ -224,10 +225,12 @@ def bootstrap(self):
 # load uuids into memory
 def getUuids(self):
     bootstrap(self)
+    global admission_encounters_array
     global icustays_array
     global location_array
     global caregiver_array
     global concepts_array
+    admission_encounters_array = getAdmissionEncounters(self)
     icustays_array = getIcustays(self)
     location_array = getLocations(self)
     caregiver_array = getCaregivers(self)
@@ -428,13 +431,15 @@ def postDict(endpoint, table, Dict):
         print(r)
     if ("Location" in r.headers):
         uuid = r.headers['Location'].split('/').pop()
-        #save_json(table,uuid,Dict)
+        if(saveFiles):
+            save_json(table,uuid,Dict)
         return (uuid)
     else:
         response = json.loads(r.text)
         if ('uuid' in response):
             uuid = response['uuid']
-            #save_json(table,uuid,Dict)
+            if(saveFiles):
+                save_json(table,uuid,Dict)
             return(uuid)
         else:
             print("Unexpected response:")
@@ -543,6 +548,17 @@ def getIcustays(self):
     for icustay in cur:
         icustays[icustay.icustay_id] = icustay.uuid
     return (icustays)
+
+#load all visits into an array for easy searching
+def getAdmissionEncounters(self):
+    self.getExisting = True
+    self.src ='admissions' 
+    self.uuid = 1
+    cur = getSrc(self)
+    admissions = {}
+    for admission in cur:
+        admissions[admission.hadm_id] = admission.uuid
+    return(admissions)
 
 #load all caregivers into an array for easy searching
 def getCaregivers(self):
@@ -701,23 +717,30 @@ def addPatient(self,record):
     return(uuid)
 
 def addAdmissionEvents(self, admission):
-    admission_events = getAdmissionEvents(self, admission)
-    #print(admission)
-    for table in admission_events:
-        for event in admission_events[table]:
+    events = getAdmissionEvents(self, admission)
+    for table in events:
+        for event in events[table]:
             try:
                 encounter_uuid = icustays_array[event.icustay_id]
             except Exception:
-                encounter_uuid = admission.uuid
+                encounter_uuid = admission_encounters_array[event.hadm_id]
                 pass
             try:
                 itemid = event.itemid
             except Exception:
                 itemid = False
                 pass
-            if(itemid == 917 and table == 'chartevents' and event.value):
-                addDiagnosis(admission,event,admission.uuid)
-            else:
+            try:
+                category = event.itemid
+            except Exception:
+                category = False
+                pass
+            if(table == 'chartevents'):
+                if(itemid == 917 and event.value):
+                    addDiagnosis(admission,event)
+                elif((event.itemid == 220045 or event.itemid == 211) and event.valuenum):
+                    addObs(self,table,event,admission,encounter_uuid)
+            elif(table == 'noteevents' and event.category == 'Discharge summary'):
                 addObs(self,table,event,admission,encounter_uuid)
 
 # post admissions to openmrs fhir encounters interface
@@ -842,12 +865,6 @@ def addAdmission(self,record):
 #                 addObs(events_source,event,record,admission_uuid,stay_array)
         return(visit_uuid)
 
-
-#create a fhir observation for admission diagnosis
-def addDiag(self,admission):
-    print(admission)
-    addDiagnosis(admission,admission.uuid)
-
 #create a fhir observation for a mimic event
 def addObs(self,obs_type,obs,admission,encounter_uuid):
     value = False
@@ -950,7 +967,11 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
         print([obs_type,concept_uuid,value_type,value,units,date,obs.row_id])
         return(None)
 
-def addDiagnosis(admission,event,visit_uuid):
+def addDiagnosis(admission,event):
+    try:
+        cguuid = caregivers_array[event.cgid]
+    except Exception:
+        cguuid = 'd5889800-845c-496c-a637-58c4f7edc953'
     note = {
         "resourceType":
         "Encounter",
@@ -978,7 +999,12 @@ def addDiagnosis(admission,event,visit_uuid):
             }
         }],
         "partOf": {
-            "reference": "Encounter/" + visit_uuid,
+            "reference": "Encounter/" + admission.uuid,
+        },
+        "participant": {
+            "individual": {
+            "reference": "Practitioner/" + cguuid,
+            }
         }
     }
     encounter_uuid = postDict('fhir', 'encounter', note)
@@ -1116,8 +1142,6 @@ def addDiagnosis(admission,event,visit_uuid):
         ]
     }
     obsgroup_uuid = postDict('fhir','observation',obsgroup_json)
-    print(obsgroup_json)
-    print(obsgroup_uuid)
 
 # link enumerated concepts to their parent concepts
 def genConceptMap(self):
