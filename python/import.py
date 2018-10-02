@@ -84,7 +84,7 @@ class base ():
     self.src = 'visits'
     self.task = mrsman.addRecords
     self.adder = mrsman.addAdmission
-    mrsman.numThreads = 20
+    mrsman.numThreads = 50
     try:
         mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
@@ -141,7 +141,7 @@ class base ():
     admissions.task = mrsman.addRecords
     admissions.adder = mrsman.addAdmission
     admissions.num = False
-    mrsman.numThreads = 20
+    mrsman.numThreads = 50
     mrsman.runTask(admissions)
 
 base()
