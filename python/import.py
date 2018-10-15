@@ -68,8 +68,6 @@ class base ():
     self.task = mrsman.addRecords
     self.adder = mrsman.addPatient
     mrsman.numThreads = 5
-#    if (not self.num):
-#       self.num = 1
     try:
         mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
@@ -91,19 +89,6 @@ class base ():
         mrsman.exitFlag = True
         print('\n! Received keyboard interrupt, quitting threads.\n')
   #
-  #fhir enchanced observations
-  def genDiagnosis(self):
-    mrsman.getUuids(self)
-    self.deltadate = True
-    self.uuid = 1
-    self.src = 'visits'
-    self.task = mrsman.addRecords
-    self.adder = mrsman.addDiag
-    if(self.num):
-        self.filter = {'hadm_id':self.num}
-    self.num = False
-    mrsman.runTask(self)
-  #
   def genEvents(self):
     mrsman.getUuids(self)
     self.deltadate = True
@@ -111,9 +96,11 @@ class base ():
     self.src = 'visits'
     self.task = mrsman.addRecords
     self.adder = mrsman.addAdmissionEvents
-    mrsman.numThreads = 50
     if(self.num):
+        mrsman.numThreads = 1
         self.filter = {'hadm_id':self.num}
+    else:
+        mrsman.numThreads = 50
     self.num = False
     mrsman.runTask(self)
 
@@ -125,23 +112,25 @@ class base ():
     mrsman.deletePatient(self,subject_id)
     mrsman.shutdown(self)
 
-
-  def initPatientsAdmit(self):
+  def init(self):
     mrsman.getUuids(self)
-    self.deltadate = True
-    self.task = mrsman.addRecords
-    self.uuid = -1
-    patients = copy.copy(self)
-    admissions = copy.copy(self)
-    patients.src = 'patients'
-    patients.adder = mrsman.addPatient
-    mrsman.numThreads = 5
-    mrsman.runTask(patients)
-    admissions.src = 'visits'
-    admissions.task = mrsman.addRecords
-    admissions.adder = mrsman.addAdmission
-    admissions.num = False
-    mrsman.numThreads = 50
-    mrsman.runTask(admissions)
+    child = copy.copy(self)
+    child.src = 'diagnoses_icd'
+    child.filter = {'icd9_code':'E9571'}
+    child.limit = 10;
+    diagnoses = mrsman.getSrc(child)
+    child = copy.copy(self)
+    child.uuid = 1
+    child.src = 'visits'
+    patients = []
+    for diagnosis in diagnoses:
+        if diagnosis.subject_id not in patients:
+           patients.append(diagnosis.subject_id)
+           child.filter = {'subject_id':diagnosis.subject_id}
+           admissions = mrsman.getSrc(child)
+           for admission in admissions:
+               print(admission)
+               admission_data = mrsman.getAdmissionData(self,admission)
+               mrsman.handleTransfers(self,admission_data['transfers'])
 
 base()

@@ -224,17 +224,22 @@ def bootstrap(self):
 
 # load uuids into memory
 def getUuids(self):
+    global uuid_array
     bootstrap(self)
-    global admission_encounters_array
-    global icustays_array
-    global location_array
-    global caregiver_array
-    global concepts_array
-    admission_encounters_array = getAdmissionEncounters(self)
-    icustays_array = getIcustays(self)
-    location_array = getLocations(self)
-    caregiver_array = getCaregivers(self)
-    concepts_array = getConcepts(self)
+    uuid_array = {}
+    index_fields = {
+                   'admissions':'hadm_id',
+                   'icustays':'icustay_id',
+                   'icustays':'icustay_id',
+                   'patients':'subject_id',
+                   'caregivers':'cgid',
+                   }
+    for table_name in index_fields:
+        child = copy.copy(self)
+        child.src = table_name
+        child.index_on = index_fields[table_name]
+        uuid_array[table_name] = genIndex(child)
+    uuid_array['concepts'] = getConcepts(self)
 
 
 # close db connections
@@ -497,7 +502,7 @@ def getAdmissionData(self, admission):
     self.filter =  {'hadm_id': admission.hadm_id}
     tables = [
         'callout','diagnoses_icd','drgcodes','icustays','prescriptions',
-        'services','transfers']
+        'procedures_icd','services','transfers']
     admission_data = {}
     for table in tables:
         admission_data[table] = []
@@ -507,7 +512,7 @@ def getAdmissionData(self, admission):
             admission_data[table].append(record)
     return (admission_data)
 
-# load data from admission related tables
+# load observation events admission related tables
 def getAdmissionEvents(self, admission):
     child = copy.copy(self)
     child.uuid = -1
@@ -516,8 +521,7 @@ def getAdmissionEvents(self, admission):
     events_tables = [
         'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
         'inputevents_mv','labevents','microbiologyevents','noteevents',
-        'outputevents','procedureevents_mv','procedures_icd'
-    ]
+        'outputevents','procedureevents_mv']
     admission_events = {}
     for table in events_tables:
         admission_events[table] = []
@@ -527,27 +531,15 @@ def getAdmissionEvents(self, admission):
             admission_events[table].append(record)
     return (admission_events)
 
-#load all locations into an array for easy searching
-def getLocations(self):
+#load generate a uuid array for easy searching
+def genIndex(self):
     self.getExisting = True
-    self.src ='locations' 
     self.uuid = 1
     cur = getSrc(self)
-    locations = {}
-    for location in cur:
-        locations[location.location] = location.uuid
-    return (locations)
-
-#load all icustays into an array for easy searching
-def getIcustays(self):
-    self.getExisting = True
-    self.src ='icustays' 
-    self.uuid = 1
-    cur = getSrc(self)
-    icustays = {}
-    for icustay in cur:
-        icustays[icustay.icustay_id] = icustay.uuid
-    return (icustays)
+    records = {}
+    for record in cur:
+        records[getattr(record,self.index_on)] = record.uuid;
+    return(records)
 
 #load all visits into an array for easy searching
 def getAdmissionEncounters(self):
@@ -573,8 +565,10 @@ def getCaregivers(self):
 #load all concepts into an array for easy searching
 def getConcepts(self):
     self.getExisting = True
-    self.src = 'concepts' 
-    cur = getSrc(self)
+    child = copy.copy(self)
+    child.src = 'concepts' 
+    child.uuid = 1
+    cur = getSrc(child)
     concepts = {}
     concepts['test_num'] = {}
     concepts['test_text'] = {}
@@ -584,12 +578,15 @@ def getConcepts(self):
     concepts['category'] = {}
     concepts['icd9_codes'] = {}
     for concept in cur:
+      try:
         if concept.concept_type in ['test_num','test_text','test_enum']:
             concepts[concept.concept_type][concept.itemid] = concept.uuid
         elif concept.concept_type in ['diagnosis','answer','category']:
             concepts[concept.concept_type][concept.shortname] = concept.uuid
         elif concept.concept_type in ['icd_diagnosis','icd_procedure']:
             concepts['icd9_codes'][concept.icd9_code] = concept.uuid
+      except Exception as e:
+        print(e) 
     return concepts
 
 #MODEL MANIPULATION
@@ -721,9 +718,9 @@ def addAdmissionEvents(self, admission):
     for table in events:
         for event in events[table]:
             try:
-                encounter_uuid = icustays_array[event.icustay_id]
+                encounter_uuid = uuid_array['icustays'][event.icustay_id]
             except Exception:
-                encounter_uuid = admission_encounters_array[event.hadm_id]
+                encounter_uuid = uuid_array['admissions'][event.hadm_id]
                 pass
             try:
                 itemid = event.itemid
@@ -744,6 +741,12 @@ def addAdmissionEvents(self, admission):
                 print('encounter_uuid');
                 print(encounter_uuid);
                 addObs(self,table,event,admission,encounter_uuid)
+
+# post admissions to openmrs fhir encounters interface
+def handleTransfers(self,transfers):
+    for transfer in transfers:
+        print(transfer)
+    
 
 # post admissions to openmrs fhir encounters interface
 def addAdmission(self,record):
@@ -789,7 +792,8 @@ def addAdmission(self,record):
             "finished",
             "type": [{
                 "coding": [{
-                    "display": record.admission_type
+#                    "display": record.admission_type
+                    "display": "dmission"
                 }]
             }],
             "subject": {
@@ -843,7 +847,7 @@ def addAdmission(self,record):
                 },
                 "location": [{
                     "location": {
-                        "reference": "Location/" + location_array[icustay.first_careunit],
+                        "reference": "Location/" + uuid_array['locations'][icustay.first_careunit],
                     },
                     "period": {
                         "start": deltaDate(icustay.intime, record.offset),
@@ -883,7 +887,7 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
         value_type = 'numeric'
         value = obs.value
         units = obs.valueuom
-        concept_uuid = concepts_array['test_num'][obs.itemid]
+        concept_uuid = uuid_array['concepts'][obs.itemid]
     elif(obs_type in ('inputevents_cv','inputevents_mv')):
         value_type = 'numeric'
         if(obs.amount):
@@ -898,21 +902,21 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
         elif(obs.originalrate):
             value = obs.originalrate
             units = obs.originalrateuom
-        concept_uuid = concepts_array['test_num'][obs.itemid]
+        concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
     elif(obs_type in ('chartevents','labevents')):
         if(obs.valuenum):
             value_type = 'numeric'
             value = obs.valuenum
-            concept_uuid = concepts_array['test_num'][obs.itemid]
+            concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
             if(obs.valueuom):
                 units = obs.valueuom
         elif(obs.value):
             value_type = 'text'
             value = obs.value
-            concept_uuid = concepts_array['test_text'][obs.itemid]
+            concept_uuid = uuid_array['concepts']['test_text'][obs.itemid]
     elif(obs_type == 'noteevents'):
         value_type = 'text'
-        concept_uuid = concepts_array['category'][obs.category]
+        concept_uuid =uuid_array['concepts']['category'][obs.category]
         value = obs.text
     try:
         if(obs.charttime):
@@ -971,7 +975,7 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
 
 def addDiagnosis(admission,event,encounter_uuid):
     try:
-        cguuid = caregivers_array[event.cgid]
+        cguuid = uuid_array['caregivers'][event.cgid]
     except Exception:
         cguuid = 'd5889800-845c-496c-a637-58c4f7edc953'
     note = {

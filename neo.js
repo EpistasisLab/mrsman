@@ -17,6 +17,12 @@ if (argv['i']) {
 } else {
     var ip = '127.0.0.1';
 }
+if (argv['c']) {
+    var config = argv['c'];
+} else {
+    var config = 'config.json';
+}
+
 
 //load site data
 var exP = awcm.syncFile('config.json');
