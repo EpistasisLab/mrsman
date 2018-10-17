@@ -25,6 +25,7 @@ use_omrsnum = False
 numThreads = 1
 saveFiles = True
 exitFlag = False
+shiftDates = True
 
 #THREADING
 #
@@ -40,7 +41,7 @@ class mrsThread (threading.Thread):
           if exitFlag:
               break
           print ("thread %s, iter %s" % (self.name, self.counter))
-          if not (self.task(self)):
+          if not (handleRecords(self)):
               break
           self.counter -= 1
       print ("Exiting %s: %s" % (self.name, time.ctime(time.time())))
@@ -55,9 +56,9 @@ def runTask(self):
             self.limit = self.num
         else:
             self.limit = False
-        self.task(self)
+        handelRecords(self)
 
-#load num records from src using adder - split among numThreads
+#load num records from src using callback - split among numThreads
 def splitTask(self):
     if(self.num and self.num < numThreads):
         self.nt = self.num
@@ -74,7 +75,7 @@ def splitTask(self):
     for x in range(0, self.nt):
       threads[x] = mrsThread(x,self)
       #function used to fetch records
-      threads[x].task = self.task
+      #threads[x].task = self.task
       #number of threads
       threads[x].nt = self.nt
       #records to fetch at once
@@ -86,7 +87,7 @@ def splitTask(self):
       #source table
       threads[x].src = self.src
       #function used to process a record
-      threads[x].adder = self.adder
+      threads[x].callback = self.callback
       if ('uuid' in dir(self)):
           threads[x].uuid = self.uuid
       if ('deltadate' in dir(self)):
@@ -106,14 +107,19 @@ def getSrc(self):
     uuid = False
     deltadate = False
     Filter = {}
+    #limit the number of records to return
     if ('limit' in dir(self) and self.limit > 0):
         limit = str(self.limit)
+    #return records with a uuid (1) or none (-1)
     if ('uuid' in dir(self)):
         uuid = self.uuid
+    #join with deltadate table
     if ('deltadate' in dir(self)):
         deltadate = self.deltadate
+    #include a subset of records based on mod x
     if ('x' in dir(self) and self.x is not False):
         Filter.update({"MOD("+self.src+".row_id,"+ str(numThreads) +")":str(self.x)})
+    #filter records based on an array of key/value pairs
     if ('filter' in dir(self) and self.filter):
         Filter.update(self.filter)
     stmt = "select " + self.src + ".*"
@@ -151,13 +157,13 @@ def getSrc(self):
         exit()
 
 # fetch and post records, saving the uuid if it doesn't already exist
-def addRecords(self):
+def handleRecords(self):
     cur = getSrc(self)
     success = 0
     child = copy.copy(self)
     child.x = False
     for record in cur:
-        uuid=self.adder(child,record)
+        uuid=self.callback(child,record)
         if (uuid):
            print("added "+self.src+": " + uuid)
            if(self.uuid == -1):
@@ -186,7 +192,10 @@ def save_json(model_type,uuid,data):
     directory = json_path + '/' + model_type
     filename = directory + '/' + uuid + '.json'
     if not os.path.exists(directory):
-        os.makedirs(directory) 
+        try:
+            os.makedirs(directory) 
+        except Exception as e:
+            print(e)
     with open(filename, 'w') as outfile:
         json.dump(data, outfile)
 
@@ -229,10 +238,11 @@ def getUuids(self):
     uuid_array = {}
     index_fields = {
                    'admissions':'hadm_id',
-                   'icustays':'icustay_id',
+                   'visits':'hadm_id',
                    'icustays':'icustay_id',
                    'patients':'subject_id',
                    'caregivers':'cgid',
+                   'locations':'location',
                    }
     for table_name in index_fields:
         child = copy.copy(self)
@@ -260,7 +270,10 @@ def randomDate(start, end):
 
 #shift dates by offset number of hours
 def deltaDate(src_date, offset):
-    return str((src_date + relativedelta(days=-offset)).isoformat())
+    if(shiftDates):
+        return str((src_date + relativedelta(days=-offset)).isoformat())
+    else:
+        return str(src_date.isoformat())
 
 # generate a luhn mod 30 check character 
 def luhnmod30(id_without_check):
@@ -792,8 +805,9 @@ def addAdmission(self,record):
             "finished",
             "type": [{
                 "coding": [{
-#                    "display": record.admission_type
-                    "display": "dmission"
+#                    "display": "admission"
+                    "display": record.admission_type
+#                    "display": "Vitals"
                 }]
             }],
             "subject": {
@@ -835,7 +849,8 @@ def addAdmission(self,record):
                 "status": "finished",
                 "type": [{
                     "coding": [{
-                         "display": record.admission_type
+                        "display": "Vitals"
+   #                      "display": record.admission_type
                     }]
                 }],
                 "subject": {
@@ -865,10 +880,112 @@ def addAdmission(self,record):
                'uuid': icuenc_uuid
             })
             icuuuid_cur.close()
-#            stay_array[icustay.icustay_id] = icuenc_uuid
-#        for events_source in admission_data['events']:
-#             for event in admission_data['events'][events_source]:
-#                 addObs(events_source,event,record,admission_uuid,stay_array)
+        for transfer in admission_data['transfers']:
+            print(transfer)
+            transenc = False
+            current_unit = False
+            previous_unit = False
+            transenc = False
+            if(transfer.curr_careunit):
+                current_unit = "Location/" + uuid_array['locations'][transfer.curr_careunit]
+            if(transfer.prev_careunit):
+                previous_unit = "Location/" + uuid_array['locations'][transfer.prev_careunit]
+            if(transfer.eventtype == 'transfer'):
+                transenc = {
+                    "resourceType": "Encounter",
+                    "status": "finished",
+                    "type": [{
+                         "coding": [{
+                             "display": "Transfer"
+                        }]
+                    }],
+                    "subject": {
+                    "id": record.patient_uuid,
+                    },
+                    "period": {
+                        "start": deltaDate(transfer.intime, record.offset),
+                        "end": deltaDate(transfer.outtime, record.offset)
+                    },
+                    "partOf": {
+                        "reference": "Encounter/" + visit_uuid,
+                    }
+                }
+                if(current_unit):
+                    transenc['location'] = [{
+                        "location": {
+                            "reference": current_unit,
+                        },
+                        "period": {
+                            "start": deltaDate(transfer.intime, record.offset),
+                            "end": deltaDate(transfer.outtime, record.offset)
+                        }
+                    }]
+                    transuuid = postDict('fhir', 'encounter', transenc)
+            if(transfer.eventtype == 'discharge'):
+                transenc = {
+                    "resourceType": "Encounter",
+                    "status": "finished",
+                    "type": [{
+                         "coding": [{
+                             "display": "Discharge"
+                        }]
+                    }],
+                    "subject": {
+                    "id": record.patient_uuid,
+                    },
+                    "period": {
+                        "start": deltaDate(transfer.intime, record.offset),
+                        "end": deltaDate(transfer.intime, record.offset)
+                    },
+                    "partOf": {
+                        "reference": "Encounter/" + visit_uuid,
+                    }
+                }
+                if(previous_unit):
+                    transenc['location'] = [{
+                        "location": {
+                            "reference": previous_unit,
+                        },
+                        "period": {
+                            "start": deltaDate(transfer.intime, record.offset),
+                            "end": deltaDate(transfer.outtime, record.offset)
+                        }
+                    }]
+                transuuid = postDict('fhir', 'encounter', transenc)
+            if(transfer.eventtype == 'admit'):
+                transenc = {
+                    "resourceType": "Encounter",
+                    "status": "finished",
+                    "type": [{
+                         "coding": [{
+                             "display": "Admission"
+                        }]
+                    }],
+                    "subject": {
+                    "id": record.patient_uuid,
+                    },
+                    "period": {
+                        "start": deltaDate(transfer.intime, record.offset),
+                        "end": deltaDate(transfer.outtime, record.offset)
+                    },
+                    "partOf": {
+                        "reference": "Encounter/" + visit_uuid,
+                    }
+                }
+                if(current_unit):
+                    transenc['location'] = [{
+                        "location": {
+                            "reference": current_unit,
+                        },
+                        "period": {
+                            "start": deltaDate(transfer.intime, record.offset),
+                            "end": deltaDate(transfer.outtime, record.offset)
+                        }
+                    }]
+                transuuid = postDict('fhir', 'encounter', transenc)
+            #if(transenc):
+            #    transuuid = postDict('fhir', 'encounter', transenc)
+
         return(visit_uuid)
 
 #create a fhir observation for a mimic event
@@ -1007,11 +1124,11 @@ def addDiagnosis(admission,event,encounter_uuid):
         "partOf": {
             "reference": "Encounter/" + encounter_uuid,
         },
-    #    "participant": [{
-    #        "individual": {
-    #        "reference": "Practitioner/" + cguuid,
-    #    }
-    #    }]
+        "participant": [{
+            "individual": {
+            "reference": "Practitioner/" + cguuid,
+        }
+        }]
     }
     encounter_uuid = postDict('fhir', 'encounter', note)
     certainty_json = {

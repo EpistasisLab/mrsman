@@ -22,8 +22,9 @@ class base ():
   #
   #initialize openmrs database (run before initial website load on fresh install)
   def initDb(self):
+    print("bootstrap")
     mrsman.bootstrap(self)
-    print("initializing database")
+    print("initialize database")
     mrsman.loadPgsqlFile(self,'../mimic/sql/add_tables.sql')
     print("import concepts")
     mrsman.conceptsToConcepts(self)
@@ -34,6 +35,7 @@ class base ():
   #
   #rest based record creation
   def initRestResources(self):
+    print("bootstrap")
     mrsman.bootstrap(self)
     print("add locations")
     mrsman.locationsToLocations(self)
@@ -46,11 +48,11 @@ class base ():
   #
   #fhir based practitioners
   def initCaregivers(self):
+    print("bootstrap")
     mrsman.bootstrap(self)
     self.src = 'caregivers'
     self.uuid = -1
-    self.task = mrsman.addRecords
-    self.adder = mrsman.addCaregiver
+    self.callback = mrsman.addCaregiver
     mrsman.numThreads = 5
     if (not self.num):
        self.num = 8000 
@@ -65,8 +67,7 @@ class base ():
     self.deltadate = True
     self.src = 'patients'
     self.uuid = -1
-    self.task = mrsman.addRecords
-    self.adder = mrsman.addPatient
+    self.callback = mrsman.addPatient
     mrsman.numThreads = 5
     try:
         mrsman.runTask(self)
@@ -80,8 +81,7 @@ class base ():
     self.deltadate = True
     self.uuid = -1
     self.src = 'visits'
-    self.task = mrsman.addRecords
-    self.adder = mrsman.addAdmission
+    self.callback = mrsman.addAdmission
     mrsman.numThreads = 50
     try:
         mrsman.runTask(self)
@@ -89,13 +89,13 @@ class base ():
         mrsman.exitFlag = True
         print('\n! Received keyboard interrupt, quitting threads.\n')
   #
+  #fhir based observations
   def genEvents(self):
     mrsman.getUuids(self)
     self.deltadate = True
     self.uuid = 1
     self.src = 'visits'
-    self.task = mrsman.addRecords
-    self.adder = mrsman.addAdmissionEvents
+    self.callback = mrsman.addAdmissionEvents
     if(self.num):
         mrsman.numThreads = 1
         self.filter = {'hadm_id':self.num}
@@ -103,7 +103,6 @@ class base ():
         mrsman.numThreads = 50
     self.num = False
     mrsman.runTask(self)
-
   #
   #fhir delete a patient 
   def reinitPatient(self):

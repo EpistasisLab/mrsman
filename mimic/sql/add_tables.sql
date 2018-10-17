@@ -34,7 +34,7 @@ CREATE TABLE encountertypes
   row_id SERIAL,
   encountertype character varying(50)
 );
-insert into encountertypes (encountertype) (select admission_type from mimiciii.admissions group by admission_type);
+insert into encountertypes (encountertype) (select category from mimiciii.noteevents group by category);
 CREATE UNIQUE INDEX encountertype_idx ON encountertypes (encountertype);
 
 
@@ -81,10 +81,10 @@ CREATE TABLE concepts
 CREATE UNIQUE INDEX conceptname_idx ON concepts (longname);
 
 -- Generate concepts from d_items table
-insert into concepts (itemid,shortname,longname,concept_type,linksto) select itemid,label,concat(label,' [',concept_type,'_',itemid,']'),concat('test_',concept_type),linksto from (select itemid,label,unnest('{text,enum,num}'::text[]) concept_type,linksto,dbsource from mimiciii.d_items) c;
+insert into concepts (itemid,shortname,longname,concept_type,linksto) select itemid,label,concat(label,' [',concept_type,'_',itemid,']'),concat('test_',concept_type),linksto from (select itemid,label,unnest('{text,enum,num,set}'::text[]) concept_type,linksto,dbsource from mimiciii.d_items) c;
 
 -- Generate concepts from d_labitems table
-insert into concepts (itemid,shortname,longname,concept_type,linksto) select itemid,label,concat(label,' [',concept_type,'_',itemid,']'),concat('test_',concept_type),'labevents' linksto from (select itemid,label,unnest('{text,num}'::text[]) concept_type from mimiciii.d_labitems) c;
+insert into concepts (itemid,shortname,longname,concept_type,linksto) select itemid,label,concat(label,' [',concept_type,'_',itemid,']'),concat('test_',concept_type),'labevents' linksto from (select itemid,label,unnest('{text,num,set}'::text[]) concept_type from mimiciii.d_labitems) c;
 
 -- map distinct values for each chartevents item where avg occurance > 1000 
 drop table if exists cetxt_map;
@@ -138,6 +138,7 @@ update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_
 update concepts set concept_class_id = 1, concept_datatype_id = 1 where concept_type  = 'test_num';
 update concepts set concept_class_id = 1, concept_datatype_id = 2 where concept_type  = 'test_enum';
 update concepts set concept_class_id = 1, concept_datatype_id = 3 where concept_type  = 'test_text';
+update concepts set concept_class_id = 8, concept_datatype_id = 4 where concept_type  = 'test_set';
 
 -- add numeric concept params
 update concepts set min_val = cenum.min_val, max_val = cenum.max_val, avg_val = cenum.avg_val, units = cenum.units from cenum where  concepts.itemid = cenum.itemid and concepts.concept_type = 'test_num';
