@@ -64,6 +64,20 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 ### Routines and typical run-time
 #### initDB (20-30 min)
 generate MIMIC-III metadata schema, insert OpenMRS concept records
+..* Process text chart data
+Create Concepts for common values
+..*  extract distinct values and items where value is alphabetical 
+create temporary table cetxt_tmp as select value,itemid,count(*) num from mimiciii.chartevents where value ~ '[a-zA-Z]'  and valuenum is null  group by itemid,value order by itemid;
+..* Generate concepts from d_items table
+..* Generate concepts from d_labitems table
+..* map common chartevents values (enumerated lists)
+..* Process numeric labevents data (max, min, avg. values for each observation type)
+..* summarize units, use most common 
+..* Process numeric chart data (summarize units, set max, min avg.)
+..* generate concepts for all diagnoses tables (including admissions)
+..* generate concepts for all noteevents categories
+..* generate concepts for add icd_procedures 
+..* set OpenMRS class and datatype for all concepts
 #### initRestResources (2-3 seconds)
 configure locations, encounter types, visit types
 #### initCaregivers (5-10 min)
