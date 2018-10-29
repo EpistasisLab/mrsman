@@ -43,7 +43,6 @@ post obsevation records for initialized admission encounters
 | ------------- |:-------------:| -----:| -------------:|
 meta |  concepts |      44,615 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
 meta |  encountertypes |        4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
-
 meta |  locations |     54 | [Location](https://www.hl7.org/fhir/location.html)
 meta |  visittypes |    4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
 mimiciii |      [Admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html)
