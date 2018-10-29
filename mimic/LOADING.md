@@ -1,4 +1,4 @@
-# Representing MIMIC-III Data in OpenMRS
+# Loading MIMIC-III Data into OpenMRS
 ## Process Flow
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/process.png "Loading Process")
 ## Table Mapping
@@ -34,9 +34,9 @@ mimiciii |      [procedures_icd](https://mimic.physionet.org/mimictables/procedu
 mimiciii |      [services](https://mimic.physionet.org/mimictables/services) |      73,343 | [Encounter](https://www.hl7.org/fhir/encounter.html)
 mimiciii |      [transfers](https://mimic.physionet.org/mimictables/transfers) |     261,897 | [Encounter](https://www.hl7.org/fhir/encounter.html)
 metadata |  concepts |      44,615 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
-metadata |  encountertypes |        4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
+metadata |  encountertypes |        4 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
 metadata |  locations |     54 | [Location](https://www.hl7.org/fhir/location.html)
-metadata |  visittypes |    4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
+metadata |  visittypes |    4 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
 
 ## Running the script
 import.py requires python 3.x.  It configures OpenMRS for use with the MIMIC-III dataset and loads the data using the FHIR REST API. 
