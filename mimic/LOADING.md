@@ -61,7 +61,7 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 ./python/import.py genEvents
 ```
 
-### Routines handled by this script
+### Routines and typical run-time
 #### initDB (20-30 min)
 generate MIMIC-III metadata schema, insert OpenMRS concept records
 #### initRestResources (2-3 seconds)
@@ -71,9 +71,9 @@ post practitioner records with randomly generated names and birthdates.
 #### initPatients (1-2 hrs)
 post patient records.  Generate random name, create offset record setting initial encounter timestamp to 2000-01-01 00:00:00 
 #### initAdmit (2-3 hrs)
-post encounter records for initialized patients
+post encounter records for previously initialized patients
 #### genEvents (4-6 weeks)
-post obsevation records for initialized admission encounters
+post obsevation records for previously initialized admission encounters
 
 ### Notes
 *_cv tables originate from [CareVue](http://www.medsphere.com/open-vista)
