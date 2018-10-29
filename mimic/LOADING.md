@@ -1,5 +1,7 @@
 # Representing MIMIC-III Data in OpenMRS
+Loading Process:
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/process.png "Loading Process")
+Object Map:
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/graph.png "MIMIC/OpenMRS object map")
 # About the script
 import.py configures OpenMRS for use with the MIMIC-III dataset. Do not log into OpenMRS until *after* initDb finishes.
