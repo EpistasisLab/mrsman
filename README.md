@@ -10,7 +10,7 @@ and from OpenMRS into neo4j
 - jdk1.6+
 - neo4j 3.3.5 (with apoc 3.3 plugin) || docker
 # MIMIC-III
-[loading the MIMIC-III dataset into OpenMRS](../mimic/LOADING.md)
+[loading the MIMIC-III dataset into OpenMRS](../blob/master/mimic/LOADING.md)
 # Loading OpenMRS data into neo4j
 1. configure javascript environment
 ```bash
