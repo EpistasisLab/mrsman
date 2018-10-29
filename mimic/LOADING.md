@@ -40,7 +40,7 @@ post obsevation records for initialized admission encounters
 
 ### Counts
 | schema |      tablename|      num_records | resource
-| ------------- |:-------------:| -----:|
+| ------------- |:-------------:| -----:| -------------:|
 meta |  concepts |      44,615
 meta |  encountertypes |        4
 meta |  locations |     54
