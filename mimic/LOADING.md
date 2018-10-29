@@ -6,7 +6,7 @@
 ## Record Counts
 | schema |      tablename|      num_records | resource
 | ------------- |:-------------:| -----:| -------------:|
-mimiciii |      [admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html) "|" [Condition](https://www.hl7.org/fhir/condition.html)
+mimiciii |      [admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html) / [Condition](https://www.hl7.org/fhir/condition.html)
 mimiciii |      [callout](https://mimic.physionet.org/mimictables/callout/) |  34,499  | [Encounter](https://www.hl7.org/fhir/encounter.html)
 mimiciii |      [caregivers](https://mimic.physionet.org/mimictables/caregivers/) |    7,567 | [Practitioner](https://www.hl7.org/fhir/practitioner.html)
 mimiciii |      [chartevents](https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033 | [Observation](https://www.hl7.org/fhir/observation.html)
