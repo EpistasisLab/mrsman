@@ -1,11 +1,11 @@
 # Representing MIMIC-III Data in OpenMRS
-##Loading Process:
+## Loading Process:
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/process.png "Loading Process")
-##Object Map:
+## Object Map:
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/graph.png "MIMIC/OpenMRS object map")
-# About the script
+## About the script
 import.py configures OpenMRS for use with the MIMIC-III dataset. Do not log into OpenMRS until *after* initDb finishes.
-# Use:
+### Use:
 1. Follow postgres based [mimic build instructions](https://github.com/EpistasisLab/mimic-code/tree/master/buildmimic/postgres)
 2. Follow sdk based [OpenMRS installation instructions](https://wiki.openmrs.org/display/docs/OpenMRS+SDK)
 3. Update config.json to suit environment
@@ -23,18 +23,16 @@ import.py configures OpenMRS for use with the MIMIC-III dataset. Do not log into
 ./python/import.py initAdmit
 ./python/import.py genEvents
 ```
-
-
-
-# initDB (20-30 min)
+### Detail:
+#### initDB (20-30 min)
 generate MIMIC-III metadata schema, insert OpenMRS concept records
-# initRestResources (2-3 seconds)
+#### initRestResources (2-3 seconds)
 configure locations, encounter types, visit types
-# initCaregivers (5-10 min)
+#### initCaregivers (5-10 min)
 post practitioner records with randomly generated names and birthdates.
-# initPatients (1-2 hrs)
+#### initPatients (1-2 hrs)
 Post patient records.  Generate random name, create offset record setting initial encounter timestamp to 2000-01-01 00:00:00 
-# initAdmit (2-3 hrs)
+#### initAdmit (2-3 hrs)
 Post encounter records for initialized patients
-# genEvents (4-6 weeks)
+#### genEvents (4-6 weeks)
 Post obsevation records for initialized admission encounters
