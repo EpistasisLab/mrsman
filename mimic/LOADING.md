@@ -45,10 +45,10 @@ meta |  concepts |      44,615
 meta |  encountertypes |        4
 meta |  locations |     54
 meta |  visittypes |    4
-mimiciii |      [admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976
-mimiciii |      callout |  34,499 
-mimiciii |      caregivers |    7,567
-mimiciii |      [chartevents](https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033 | [observation](https://www.hl7.org/fhir/observation.html)
+mimiciii |      [Admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976
+mimiciii |      callout |  34,499  
+mimiciii |      caregivers |    7,567 | [Practitioner](https://www.hl7.org/fhir/practitioner.html)
+mimiciii |      [chartevents](https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      cptevents  |     573,146
 mimiciii |      d_cpt | 134
 mimiciii |      d_icd_diagnoses |       14,567
@@ -56,17 +56,17 @@ mimiciii |      d_icd_procedures | 3,882
 mimiciii |      d_items |       12,487
 mimiciii |      d_labitems |    753
 mimiciii |      datetimeevents |        4,486,425
-mimiciii |      [diagnoses_icd](https://mimic.physionet.org/mimictables/diagnoses_icd/) | 651,047
+mimiciii |      [diagnoses_icd](https://mimic.physionet.org/mimictables/diagnoses_icd/) | 651,047 | [Condition](https://www.hl7.org/fhir/condition.html) 
 mimiciii |      drgcodes |      125,557
-mimiciii |      icustays |      61,532
+mimiciii |      icustays |      61,532 |  [Encounter](https://www.hl7.org/fhir/encounter.html)
 mimiciii |      inputevents_cv |        17,527,936
 mimiciii |      inputevents_mv |        3,619,423
 mimiciii |      labevents |     27,860,624
 mimiciii |      [microbiologyevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    631,726
 mimiciii |      [noteevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    2,078,216
 mimiciii |      outputevents |  4,349,263
-mimiciii |      patients |      46,520
-mimiciii |      prescriptions | 4,156,310
+mimiciii |      patients |      46,520 | [Patient](https://www.hl7.org/fhir/patient.html)
+mimiciii |      prescriptions | 4,156,310 | [MedicationRequest](https://www.hl7.org/fhir/medicationrequest.html)
 mimiciii |      procedureevents_mv |    258,066
 mimiciii |      procedures_icd |        240,095
 mimiciii |      services |      73,343
