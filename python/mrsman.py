@@ -20,12 +20,15 @@ import os
 import copy
 from datetime import date
 from dateutil.relativedelta import relativedelta
+import fhirclient.models.encounter as Encounter
+import fhirclient.models.patient as Patient
+from fhirclient import client
 debug = False
-use_omrsnum = False
 numThreads = 1
 saveFiles = True
 exitFlag = False
 shiftDates = True
+config_file = 'config.json'
 
 #THREADING
 #
@@ -56,7 +59,7 @@ def runTask(self):
             self.limit = self.num
         else:
             self.limit = False
-        handelRecords(self)
+        handleRecords(self)
 
 #load num records from src using callback - split among numThreads
 def splitTask(self):
@@ -149,6 +152,7 @@ def getSrc(self):
     if debug:
         print(stmt)
     try:
+        pg_cur.execute("SET search_path TO mimiciii," + config['SISTER'])
         pg_cur.execute(stmt)
         return pg_cur
     except Exception as e:
@@ -208,8 +212,9 @@ def openPgCursor(self):
 #read config file and initialize database connections
 def bootstrap(self):
     global config
+    global smart
     parent_dir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
-    with open(parent_dir + '/config.json') as f:
+    with open(parent_dir + '/' + config_file) as f:
         data = json.load(f)
         config = data['global']
         config['baseuri'] = 'http://' + config['IP'] + ':' +  config['OPENMRS_PORT'] + '/openmrs/ws'
@@ -229,6 +234,12 @@ def bootstrap(self):
         print("unable to connect to the mysql database")
         print(e)
         exit()
+    settings = {
+        'app_id': 'mrsman',
+        'api_base': config['baseuri'] + '/fhir/'
+    }
+    smart = client.FHIRClient(settings=settings)
+    smart.server.session.auth=HTTPBasicAuth('admin','asVNTHdG1haUrNWb')
     return()
 
 # load uuids into memory
@@ -513,9 +524,7 @@ def getAdmissions(self, limit):
 def getAdmissionData(self, admission):
     self.limit = False
     self.filter =  {'hadm_id': admission.hadm_id}
-    tables = [
-        'callout','diagnoses_icd','drgcodes','icustays','prescriptions',
-        'procedures_icd','services','transfers']
+    tables = ['callout','icustays','services','transfers']
     admission_data = {}
     for table in tables:
         admission_data[table] = []
@@ -531,12 +540,13 @@ def getAdmissionEvents(self, admission):
     child.uuid = -1
     child.limit = False
     child.filter =  {'hadm_id': admission.hadm_id}
-    events_tables = [
-        'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
-        'inputevents_mv','labevents','microbiologyevents','noteevents',
-        'outputevents','procedureevents_mv']
+    tables = [
+        'chartevents','cptevents','datetimeevents','diagnoses_icd','drgcodes',
+        'labevents','inputevents_cv', 'inputevents_mv','labevents'
+        'microbiologyevents','noteevents','outputevents','prescriptions',
+        'procedureevents_mv','procedures_icd']
     admission_events = {}
-    for table in events_tables:
+    for table in tables:
         admission_events[table] = []
         child.src = table
         cur = getSrc(child)
@@ -687,7 +697,7 @@ def deletePatient(self,subject_id):
 def addPatient(self,record):
     gender = {"M": "male", "F": "female"}[record.gender]
     deceasedBoolean = {1: True, 0: False}[record.expire_flag]
-    if(use_omrsnum):
+    if(config['USE_OMRSNUM']):
         OpenMRSIDnumber = str(record.subject_id) + '-' + str(
             generate(str(record.subject_id)))
         identifier = [{
@@ -723,7 +733,7 @@ def addPatient(self,record):
     }
     if(debug):
         print(patient)
-    uuid = postDict('fhir', 'patient', patient)
+    uuid = create(Patient, patient)
     return(uuid)
 
 def addAdmissionEvents(self, admission):
@@ -756,10 +766,16 @@ def addAdmissionEvents(self, admission):
                 addObs(self,table,event,admission,encounter_uuid)
 
 # post admissions to openmrs fhir encounters interface
-def handleTransfers(self,transfers):
-    for transfer in transfers:
-        print(transfer)
+#def handleTransfers(self,transfers):
+    #for transfer in transfers:
+    #    print(transfer)
     
+
+def printAdmission(self,admission):
+        print("processing admission: " + str(admission.hadm_id))
+        child = copy.copy(self) 
+        admission_data = getAdmissionData(child, admission)
+        print(admission_data)
 
 # post admissions to openmrs fhir encounters interface
 def addAdmission(self,record):
@@ -770,14 +786,14 @@ def addAdmission(self,record):
         # each admission generates a grandparent (visit encounter)
         # a parent (admission encounter)
         # and one or more icustay encounters
-        visit = {
+        visit = Encounter.Encounter({
             "resourceType":
             "Encounter",
             "status":
             "finished",
             "type": [{
                 "coding": [{
-                    "code": record.visit_type_code
+                    "code": str(record.visit_type_code)
                 }]
             }],
             "subject": {
@@ -796,9 +812,13 @@ def addAdmission(self,record):
                     "end": deltaDate(record.dischtime, record.offset)
                 }
             }]
-        }
-        visit_uuid = postDict('fhir', 'encounter', visit)
-        admission = {
+        })
+        print(visit.as_json())
+        visit.create(smart.server)
+        visit_uuid = visit.id
+       
+#        visit_uuid = postDict('fhir', 'encounter', visit)
+        admission = Encounter.Encounter({
             "resourceType":
             "Encounter",
             "status":
@@ -829,8 +849,10 @@ def addAdmission(self,record):
             "partOf": {
                 "reference": "Encounter/" + visit_uuid,
             }
-        }
-        admission_uuid = postDict('fhir', 'encounter', admission)
+        })
+        admission.create(smart.server)
+        admission_uuid = admission.id
+#        admission_uuid = postDict('fhir', 'encounter', admission)
         admission_cur = insertPgDict(child,'uuids', {
            'src': 'admissions',
            'row_id': record.row_id,
@@ -844,7 +866,7 @@ def addAdmission(self,record):
             else:
                 outtime = icustay.outtime
             print("processing stay: " + str(icustay.icustay_id))
-            icuenc = {
+            icuenc = Encounter.Encounter({
                 "resourceType": "Encounter",
                 "status": "finished",
                 "type": [{
@@ -872,16 +894,17 @@ def addAdmission(self,record):
                 "partOf": {
                     "reference": "Encounter/" + visit_uuid,
                 }
-            }
-            icuenc_uuid = postDict('fhir', 'encounter', icuenc)
+            })
+            icuenc_uuid = icuenc.id
+#            icuenc_uuid = postDict('fhir', 'encounter', icuenc)
             icuuuid_cur = insertPgDict(child,'uuids', {
                'src': 'icustays',
                'row_id': icustay.row_id,
                'uuid': icuenc_uuid
             })
-            icuuuid_cur.close()
+#            icuuuid_cur.close()
         for transfer in admission_data['transfers']:
-            print(transfer)
+            #print(transfer)
             transenc = False
             current_unit = False
             previous_unit = False
@@ -920,7 +943,8 @@ def addAdmission(self,record):
                             "end": deltaDate(transfer.outtime, record.offset)
                         }
                     }]
-                    transuuid = postDict('fhir', 'encounter', transenc)
+#                    transuuid = postDict('fhir', 'encounter', transenc)
+                    transuuid = '567'
             if(transfer.eventtype == 'discharge'):
                 transenc = {
                     "resourceType": "Encounter",
@@ -946,12 +970,13 @@ def addAdmission(self,record):
                         "location": {
                             "reference": previous_unit,
                         },
-                        "period": {
-                            "start": deltaDate(transfer.intime, record.offset),
-                            "end": deltaDate(transfer.outtime, record.offset)
-                        }
+#                        "period": {
+#                            "start": deltaDate(transfer.intime, record.offset),
+#                            "end": deltaDate(transfer.outtime, record.offset)
+#                        }
                     }]
-                transuuid = postDict('fhir', 'encounter', transenc)
+                transuuid = '678'
+            #    transuuid = postDict('fhir', 'encounter', transenc)
             if(transfer.eventtype == 'admit'):
                 transenc = {
                     "resourceType": "Encounter",
@@ -982,11 +1007,13 @@ def addAdmission(self,record):
                             "end": deltaDate(transfer.outtime, record.offset)
                         }
                     }]
-                transuuid = postDict('fhir', 'encounter', transenc)
+                transuuid = '789'
+            #    transuuid = postDict('fhir', 'encounter', transenc)
             #if(transenc):
             #    transuuid = postDict('fhir', 'encounter', transenc)
 
-        return(visit_uuid)
+        #return(visit_uuid)
+        return(False)
 
 #create a fhir observation for a mimic event
 def addObs(self,obs_type,obs,admission,encounter_uuid):

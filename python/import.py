@@ -6,13 +6,24 @@ class base ():
   def __init__(self):
     if (len(sys.argv) > 1):
         #run function from cli
-        a = eval("base." + sys.argv[1])
-        try:
-            self.num = int(eval(sys.argv[2]))
-        except:
-            self.num = False
-        #self.exitFlag = 0
-        a(self)
+        func = False
+        num = False
+        debug = False
+        i = 1
+        while i < len(sys.argv):
+            if(sys.argv[i].isdigit()):
+                num = int(eval(sys.argv[i]))
+            elif(sys.argv[i] == '-d'):
+                debug = True
+            elif(sys.argv[i] == '-a'):
+                mrsman.config_file = 'ann.json'
+            else:
+                func = eval("base." + sys.argv[i])
+            i += 1
+        self.num = num
+        mrsman.debug = debug
+        if(func):
+            func(self)
     else:
         tmp = globals().copy()
         print("available arguments:")
@@ -82,7 +93,7 @@ class base ():
     self.uuid = -1
     self.src = 'visits'
     self.callback = mrsman.addAdmission
-    mrsman.numThreads = 50
+#    mrsman.numThreads = 50
     try:
         mrsman.runTask(self)
     except (KeyboardInterrupt, SystemExit):
@@ -111,25 +122,30 @@ class base ():
     mrsman.deletePatient(self,subject_id)
     mrsman.shutdown(self)
 
+  def help(self):
+      print(self)
+
+
   def init(self):
     mrsman.getUuids(self)
-    child = copy.copy(self)
-    child.src = 'diagnoses_icd'
-    child.filter = {'icd9_code':'E9571'}
-    child.limit = 10;
-    diagnoses = mrsman.getSrc(child)
-    child = copy.copy(self)
-    child.uuid = 1
-    child.src = 'visits'
-    patients = []
-    for diagnosis in diagnoses:
-        if diagnosis.subject_id not in patients:
-           patients.append(diagnosis.subject_id)
-           child.filter = {'subject_id':diagnosis.subject_id}
-           admissions = mrsman.getSrc(child)
-           for admission in admissions:
-               print(admission)
-               admission_data = mrsman.getAdmissionData(self,admission)
-               mrsman.handleTransfers(self,admission_data['transfers'])
+    print(mrsman.config);
+#    child = copy.copy(self)
+#    child.src = 'diagnoses_icd'
+#    child.filter = {'icd9_code':'E9571'}
+#    child.limit = 10;
+#    diagnoses = mrsman.getSrc(child)
+#    child = copy.copy(self)
+#    child.uuid = 1
+#    child.src = 'visits'
+#    patients = []
+#    for diagnosis in diagnoses:
+#        if diagnosis.subject_id not in patients:
+#           patients.append(diagnosis.subject_id)
+#           child.filter = {'subject_id':diagnosis.subject_id}
+#           admissions = mrsman.getSrc(child)
+#           for admission in admissions:
+#               print(admission)
+#               admission_data = mrsman.getAdmissionData(self,admission)
+#               mrsman.handleTransfers(self,admission_data['transfers'])
 
 base()
