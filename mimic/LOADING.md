@@ -46,8 +46,8 @@ meta |  encountertypes |        4 | [CodeableConcept](https://www.hl7.org/fhir/d
 meta |  locations |     54 | [Location](https://www.hl7.org/fhir/location.html)
 meta |  visittypes |    4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
 mimiciii |      [Admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html)
-mimiciii |      callout |  34,499  | [Encounter](https://www.hl7.org/fhir/encounter.html)
-mimiciii |      caregivers |    7,567 | [Practitioner](https://www.hl7.org/fhir/practitioner.html)
+mimiciii |      [callout](https://mimic.physionet.org/mimictables/callout/) |  34,499  | [Encounter](https://www.hl7.org/fhir/encounter.html)
+mimiciii |      [caregivers](https://mimic.physionet.org/mimictables/caregivers/) |    7,567 | [Practitioner](https://www.hl7.org/fhir/practitioner.html)
 mimiciii |      [chartevents](https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [cptevents](https://mimic.physionet.org/mimictables/cptevents/)  |     573,146 | [Procedure](https://www.hl7.org/fhir/procedure.html)
 mimiciii |      [d_cpt](https://mimic.physionet.org/mimictables/d_cpt/) | 134 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
@@ -62,8 +62,8 @@ mimiciii |      [icustays](https://mimic.physionet.org/mimictables/icustays/) | 
 mimiciii |      [inputevents_cv](https://mimic.physionet.org/mimictables/inputevents_cv/) |        17,527,936 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [inputevents_mv](https://mimic.physionet.org/mimictables/inputevents_mv/) |        3,619,423 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [labevents](https://mimic.physionet.org/mimictables/labevents/) |     27,860,624 | [Observation](https://www.hl7.org/fhir/observation.html)
-mimiciii |      [microbiologyevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    631,726
-mimiciii |      [noteevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    2,078,216
+mimiciii |      [microbiologyevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    631,726 | [Observation](https://www.hl7.org/fhir/observation.html)
+mimiciii |      [noteevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    2,078,216 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [outputevents](https://mimic.physionet.org/mimictables/outputevents) |  4,349,263 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [patients](https://mimic.physionet.org/mimictables/patients) |      46,520 | [Patient](https://www.hl7.org/fhir/patient.html)
 mimiciii |      [prescriptions](https://mimic.physionet.org/mimictables/prescriptions) | 4,156,310 | [MedicationRequest](https://www.hl7.org/fhir/medicationrequest.html)
