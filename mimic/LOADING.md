@@ -48,9 +48,13 @@ import.py requires python 3.x.  It configures OpenMRS for use with the MIMIC-III
 ```bash
 ./python/import.py initDb
 ```
+
 ..* Do not log into OpenMRS until *after* initDb finishes.
+
 5. Log into OpenMRS
+
 ..* Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true"
+
 6. Import records
 ```bash
 ./python/import.py initRestResources
@@ -59,6 +63,7 @@ import.py requires python 3.x.  It configures OpenMRS for use with the MIMIC-III
 ./python/import.py initAdmit
 ./python/import.py genEvents
 ```
+
 ### Routines handled by this script
 #### initDB (20-30 min)
 generate MIMIC-III metadata schema, insert OpenMRS concept records
