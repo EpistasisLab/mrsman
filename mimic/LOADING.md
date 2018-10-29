@@ -49,11 +49,8 @@ import.py requires python 3.x.  It configures OpenMRS for use with the MIMIC-III
 ./python/import.py initDb
 ```
 
-..* Do not log into OpenMRS until *after* initDb finishes.
-
-5. Log into OpenMRS
-
-..* Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true"
+5. Log into OpenMRS (important: Do not log into OpenMRS until *after* initDb finishes)
+Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true"
 
 6. Import records
 ```bash
@@ -79,5 +76,6 @@ post encounter records for initialized patients
 post obsevation records for initialized admission encounters
 
 ### Notes
-..* *_cv tables originate from [CareVue](http://www.medsphere.com/open-vista)
-..* *_mv tables originate from [Metavision ICU](http://www.imd-soft.com/products/intensive-care)
+*_cv tables originate from [CareVue](http://www.medsphere.com/open-vista)
+
+*_mv tables originate from [Metavision ICU](http://www.imd-soft.com/products/intensive-care)
