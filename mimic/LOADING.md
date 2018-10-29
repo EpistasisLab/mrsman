@@ -39,7 +39,7 @@ post encounter records for initialized patients
 post obsevation records for initialized admission encounters
 
 ### Counts
-| schema |      tablename|      num_records
+| schema |      tablename|      num_records | resource
 | ------------- |:-------------:| -----:|
 meta |  concepts |      44,615
 meta |  encountertypes |        4
@@ -48,7 +48,7 @@ meta |  visittypes |    4
 mimiciii |      [admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976
 mimiciii |      callout |  34,499 
 mimiciii |      caregivers |    7,567
-mimiciii |      [chartevents](https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033
+mimiciii |      [chartevents](https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033 | [observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      cptevents  |     573,146
 mimiciii |      d_cpt | 134
 mimiciii |      d_icd_diagnoses |       14,567
