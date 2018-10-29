@@ -19,6 +19,8 @@ import.py configures OpenMRS for use with the MIMIC-III dataset. Do not log into
 ./python/import.py genEvents
 ```
 
+![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/graph.png "MIMIC/OpenMRS object map")
+
 
 # initDB (20-30 min)
 generate MIMIC-III metadata schema, insert OpenMRS concept records
