@@ -1,9 +1,10 @@
 # Representing MIMIC-III Data in OpenMRS
-## Loading and Querying Process Diagram
+## Process Flow
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/process.png "Loading Process")
-## Relational Mapping
+## Table Mapping
+### Diagram
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/graph.png "MIMIC/OpenMRS object map")
-## Record Counts
+### Details
 | schema |      tablename|      num_records | resource
 | ------------- |:-------------:| -----:| -------------:|
 mimiciii |      [admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html) / [Condition](https://www.hl7.org/fhir/condition.html)
@@ -32,13 +33,13 @@ mimiciii |      [procedureevents_mv](https://mimic.physionet.org/mimictables/pro
 mimiciii |      [procedures_icd](https://mimic.physionet.org/mimictables/procedures_icd) |        240,095 | [Procedure](https://www.hl7.org/fhir/procedure.html)
 mimiciii |      [services](https://mimic.physionet.org/mimictables/services) |      73,343 | [Encounter](https://www.hl7.org/fhir/encounter.html)
 mimiciii |      [transfers](https://mimic.physionet.org/mimictables/transfers) |     261,897 | [Encounter](https://www.hl7.org/fhir/encounter.html)
-meta |  concepts |      44,615 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
-meta |  encountertypes |        4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
-meta |  locations |     54 | [Location](https://www.hl7.org/fhir/location.html)
-meta |  visittypes |    4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
+metadata |  concepts |      44,615 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
+metadata |  encountertypes |        4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
+metadata |  locations |     54 | [Location](https://www.hl7.org/fhir/location.html)
+metadata |  visittypes |    4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
 
 ## Running the script
-import.py configures OpenMRS for use with the MIMIC-III dataset. 
+import.py requires python 3.x.  It configures OpenMRS for use with the MIMIC-III dataset and loads the data using the FHIR REST API. 
 ### Usage
 1. Follow postgres based [mimic build instructions](https://github.com/EpistasisLab/mimic-code/tree/master/buildmimic/postgres)
 2. Follow sdk based [OpenMRS installation instructions](https://wiki.openmrs.org/display/docs/OpenMRS+SDK)
@@ -47,9 +48,9 @@ import.py configures OpenMRS for use with the MIMIC-III dataset.
 ```bash
 ./python/import.py initDb
 ```
-Do not log into OpenMRS until *after* initDb finishes.
+.... Do not log into OpenMRS until *after* initDb finishes.
 5. Log into OpenMRS
-- Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true"
+.... Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true"
 6. Import records
 ```bash
 ./python/import.py initRestResources
@@ -58,7 +59,7 @@ Do not log into OpenMRS until *after* initDb finishes.
 ./python/import.py initAdmit
 ./python/import.py genEvents
 ```
-### Steps
+### Routines handled by this script
 #### initDB (20-30 min)
 generate MIMIC-III metadata schema, insert OpenMRS concept records
 #### initRestResources (2-3 seconds)
@@ -73,5 +74,5 @@ post encounter records for initialized patients
 post obsevation records for initialized admission encounters
 
 ### Notes
-{tablename}_cv tables originate from [CareVue](http://www.medsphere.com/open-vista)
-{tablename}_mv tables originate from [Metavision ICU](http://www.imd-soft.com/products/intensive-care)
+*_cv tables originate from [CareVue](http://www.medsphere.com/open-vista)
+*_mv tables originate from [Metavision ICU](http://www.imd-soft.com/products/intensive-care)
