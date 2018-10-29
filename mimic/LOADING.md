@@ -48,7 +48,7 @@ meta |  visittypes |    4
 mimiciii |      admissions |    58,976
 mimiciii |      callout |  34,499 
 mimiciii |      caregivers |    7,567
-mimiciii |      chartevents |   330,714,033
+mimiciii |      [chartevents] (https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033
 mimiciii |      cptevents |     573,146
 mimiciii |      d_cpt | 134
 mimiciii |      d_icd_diagnoses |       14,567
