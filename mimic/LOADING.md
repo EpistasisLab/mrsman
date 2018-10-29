@@ -41,11 +41,7 @@ post obsevation records for initialized admission encounters
 ### Counts
 | schema |      tablename|      num_records | resource
 | ------------- |:-------------:| -----:| -------------:|
-meta |  concepts |      44,615 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
-meta |  encountertypes |        4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
-meta |  locations |     54 | [Location](https://www.hl7.org/fhir/location.html)
-meta |  visittypes |    4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
-mimiciii |      [Admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html)
+mimiciii |      [admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html)
 mimiciii |      [callout](https://mimic.physionet.org/mimictables/callout/) |  34,499  | [Encounter](https://www.hl7.org/fhir/encounter.html)
 mimiciii |      [caregivers](https://mimic.physionet.org/mimictables/caregivers/) |    7,567 | [Practitioner](https://www.hl7.org/fhir/practitioner.html)
 mimiciii |      [chartevents](https://mimic.physionet.org/mimictables/chartevents/) |   330,714,033 | [Observation](https://www.hl7.org/fhir/observation.html)
@@ -64,11 +60,18 @@ mimiciii |      [inputevents_mv](https://mimic.physionet.org/mimictables/inputev
 mimiciii |      [labevents](https://mimic.physionet.org/mimictables/labevents/) |     27,860,624 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [microbiologyevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    631,726 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [noteevents](https://mimic.physionet.org/mimictables/microbiologyevents/) |    2,078,216 | [Observation](https://www.hl7.org/fhir/observation.html)
-mimiciii |      [outputevents](https://mimic.physionet.org/mimictables/outputevents) |  4,349,263 | [Observation](https://www.hl7.org/fhir/observation.html)
+mimiciii |      [outputevents](https://mimic.physionet.org/mimictables/noteevents/) |  4,349,263 | [Observation](https://www.hl7.org/fhir/observation.html)
 mimiciii |      [patients](https://mimic.physionet.org/mimictables/patients) |      46,520 | [Patient](https://www.hl7.org/fhir/patient.html)
 mimiciii |      [prescriptions](https://mimic.physionet.org/mimictables/prescriptions) | 4,156,310 | [MedicationRequest](https://www.hl7.org/fhir/medicationrequest.html)
 mimiciii |      [procedureevents_mv](https://mimic.physionet.org/mimictables/procedureevents_mv) |    258,066 | [Procedure](https://www.hl7.org/fhir/procedure.html)
 mimiciii |      [procedures_icd](https://mimic.physionet.org/mimictables/procedures_icd) |        240,095 | [Procedure](https://www.hl7.org/fhir/procedure.html)
 mimiciii |      [services](https://mimic.physionet.org/mimictables/services) |      73,343 | [Encounter](https://www.hl7.org/fhir/encounter.html)
 mimiciii |      [transfers](https://mimic.physionet.org/mimictables/transfers) |     261,897 | [Encounter](https://www.hl7.org/fhir/encounter.html)
+meta |  concepts |      44,615 | [Coding](https://www.hl7.org/fhir/datatypes.html#Coding)
+meta |  encountertypes |        4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
+meta |  locations |     54 | [Location](https://www.hl7.org/fhir/location.html)
+meta |  visittypes |    4 | [CodeableConcept](https://www.hl7.org/fhir/datatypes.html#CodeableConcept)
 
+### Notes
+{tablename}_cv tables originate from [CareVue](http://www.medsphere.com/open-vista)
+{tablename}_mv tables originate from [Metavision ICU](http://www.imd-soft.com/products/intensive-care)
