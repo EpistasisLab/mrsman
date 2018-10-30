@@ -63,37 +63,34 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 ### Routines and typical run-time
 #### initDB (20-30 min)
 
-<d1>
-<dt>Add OpenMRS Concepts</dt>
 <dd>generate concepts from dictionary tables (d_* and icd_* tables)</dd>
 <dd>generate concepts for all diagnoses tables (including admissions)</dd>
 <dd>generate concepts for noteevents categories</dd>
 <dd>summarize lab and numeric chart data (max, min, avg. units)</dd>
 <dd>generate enum lists for common text values</dd>
-<dd>set OpenMRS class and datatype for all concepts</dd>
-<dd>insert OpenMRS concept records</dd>
-</d1>
+<dd>set concept class and datatype</dd>
+<dd>insert records</dd>
 
 
 #### initRestResources (2-3 seconds)
 
-post locations, encounter types, visit types
+locations, encounter types, visit types
 
 #### initCaregivers (5-10 min)
 
-post practitioner records with randomly generated names and birthdates.
+practitioner records with randomly generated names and birthdates.
 
 #### initPatients (1-2 hrs)
 
-post patient records.  Generate random name, create offset record setting initial encounter timestamp to 2000-01-01 00:00:00 
+patient with random name, record offset of initial encounter from 2000-01-01 00:00:00 
 
 #### initAdmit (2-3 hrs)
 
-post encounter records for previously initialized patients
+encounter records for previously initialized patients
 
 #### genEvents (4-6 weeks)
 
-post obsevation records for previously initialized admission encounters
+obsevation records for previously initialized admission encounters
 
 ### Notes
 *_cv tables originate from [CareVue](http://www.medsphere.com/open-vista)
