@@ -62,6 +62,7 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 
 ### Routines and typical run-time
 #### initDB (20-30 min)
+
 <d1>
 <dt>Add OpenMRS Concepts</dt>
 <dd>generate concepts from dictionary tables (d_* and icd_* tables)</dd>
@@ -72,15 +73,26 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 <dd>set OpenMRS class and datatype for all concepts</dd>
 <dd>insert OpenMRS concept records</dd>
 </d1>
+
+
 #### initRestResources (2-3 seconds)
+
 post locations, encounter types, visit types
+
 #### initCaregivers (5-10 min)
+
 post practitioner records with randomly generated names and birthdates.
+
 #### initPatients (1-2 hrs)
+
 post patient records.  Generate random name, create offset record setting initial encounter timestamp to 2000-01-01 00:00:00 
+
 #### initAdmit (2-3 hrs)
+
 post encounter records for previously initialized patients
+
 #### genEvents (4-6 weeks)
+
 post obsevation records for previously initialized admission encounters
 
 ### Notes
