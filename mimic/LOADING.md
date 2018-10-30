@@ -60,7 +60,7 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 ./python/import.py genEvents
 ```
 
-### Routines and typical run-time
+### Routines (typical run-time)
 #### initDB (20-30 min)
 
 <dd>generate concepts from dictionary tables (d_* and icd_* tables)</dd>
