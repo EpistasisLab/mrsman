@@ -1,11 +1,36 @@
 {
+    "services": [{
+        "name": "neo",
+        "portMappings": [{
+            "hostPort": "7474",
+            "protocol": "tcp",
+            "containerPort": "7474"
+         },{
+            "hostPort": "7687",
+            "protocol": "tcp",
+            "containerPort": "7687"
+         },{
+            "hostPort": "7473",
+            "protocol": "tcp",
+            "containerPort": "7473"
+        }]
+     }],
     "global": {
-        "IP": "172.16.255.x",
-        "OPENMRS_PORT":"8084",
-        "MYSQL_USER":"root",
-        "MYSQL_PASS":"changeme",
-        "PGSQL_USER":"postgres",
-        "PGSQL_PASS":"postgres",
-        "SISTER":"kate"
+        "IP": "127.0.0.1",
+        "OPENMRS_PORT":"8080",
+        "NETWORK": "neos",
+        "NEO4J_dbms_memory_pagecache_size":"16G",
+        "NEO4J_dbms_memory_heap_initial__size":"16G",
+        "NEO4J_dbms_memory_heap_max__size":"16G",
+        "NEO4J_dbms_unmanaged__extension__classes":"semantics.extension=/rdf",
+        "NEO4J_apoc_import_file_enabled":true,
+        "MYSQL_USER":"mimicuser",
+        "MYSQL_PASS":"mimicpass",
+        "PGSQL_USER":"mimicuser",
+        "PGSQL_PASS":"mimicpass",
+        "OPENMRS_USER":"admin",
+        "OPENMRS_PASS":"Admin123",
+        "SISTER":"kate",
+        "USE_OMRSNUM":false
     }
 }
