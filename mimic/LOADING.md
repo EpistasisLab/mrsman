@@ -62,7 +62,8 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 
 ### Routines and typical run-time
 #### initDB (20-30 min)
-<d1>Add OpenMRS Concepts</d1>
+<d1>
+<dt>Add OpenMRS Concepts</dt>
 <dd>generate concepts from dictionary tables (d_* and icd_* tables)</dd>
 <dd>generate concepts for all diagnoses tables (including admissions)</dd>
 <dd>generate concepts for noteevents categories</dd>
@@ -70,6 +71,7 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 <dd>generate enum lists for common text values</dd>
 <dd>set OpenMRS class and datatype for all concepts</dd>
 <dd>insert OpenMRS concept records</dd>
+</d1>
 #### initRestResources (2-3 seconds)
 post locations, encounter types, visit types
 #### initCaregivers (5-10 min)
