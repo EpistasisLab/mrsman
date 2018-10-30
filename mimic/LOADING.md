@@ -1,11 +1,10 @@
 # Loading MIMIC-III Data into OpenMRS
-## Process Flow
-![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/process.png "Loading Process")
-## Table Mapping
-### Diagram
+### Mapping
 ![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/graph.png "MIMIC/OpenMRS object map")
-### Details
-| schema |      tablename|      num_records | resource
+### Process
+![alt text](https://github.com/EpistasisLab/mrsman/blob/master/docs/process.png "Loading Process")
+### Counts
+| schema |      source |      count | fhir resource
 | ------------- |:-------------:| -----:| -------------:|
 mimiciii |      [admissions](https://mimic.physionet.org/mimictables/admissions/) |    58,976 | [Encounter](https://www.hl7.org/fhir/encounter.html) / [Condition](https://www.hl7.org/fhir/condition.html)
 mimiciii |      [callout](https://mimic.physionet.org/mimictables/callout/) |  34,499  | [Encounter](https://www.hl7.org/fhir/encounter.html)
@@ -63,23 +62,16 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 
 ### Routines and typical run-time
 #### initDB (20-30 min)
-generate MIMIC-III metadata schema, insert OpenMRS concept records
-..* Process text chart data
-Create Concepts for common values
-..*  extract distinct values and items where value is alphabetical 
-create temporary table cetxt_tmp as select value,itemid,count(*) num from mimiciii.chartevents where value ~ '[a-zA-Z]'  and valuenum is null  group by itemid,value order by itemid;
-..* Generate concepts from d_items table
-..* Generate concepts from d_labitems table
-..* map common chartevents values (enumerated lists)
-..* Process numeric labevents data (max, min, avg. values for each observation type)
-..* summarize units, use most common 
-..* Process numeric chart data (summarize units, set max, min avg.)
-..* generate concepts for all diagnoses tables (including admissions)
-..* generate concepts for all noteevents categories
-..* generate concepts for add icd_procedures 
-..* set OpenMRS class and datatype for all concepts
+<d1>Add OpenMRS Concepts</d1>
+<dd>generate concepts from dictionary tables (d_* and icd_* tables)</dd>
+<dd>generate concepts for all diagnoses tables (including admissions)</dd>
+<dd>generate concepts for noteevents categories</dd>
+<dd>summarize lab and numeric chart data (max, min, avg. units)</dd>
+<dd>generate enum lists for common text values</dd>
+<dd>set OpenMRS class and datatype for all concepts</dd>
+<dd>insert OpenMRS concept records</dd>
 #### initRestResources (2-3 seconds)
-configure locations, encounter types, visit types
+post locations, encounter types, visit types
 #### initCaregivers (5-10 min)
 post practitioner records with randomly generated names and birthdates.
 #### initPatients (1-2 hrs)
