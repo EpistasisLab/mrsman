@@ -19,10 +19,13 @@ import math
 import os
 import copy
 from datetime import date
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import fhirclient.models.encounter as Encounter
 import fhirclient.models.patient as Patient
 from fhirclient import client
+import numpy as np
+import pandas as pd
 debug = False
 numThreads = 1
 saveFiles = True
@@ -30,6 +33,12 @@ exitFlag = False
 shiftDates = True
 config_file = 'config.json'
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+
+        return json.JSONEncoder.default(self, o)
 #THREADING
 #
 class mrsThread (threading.Thread):
@@ -77,8 +86,6 @@ def splitTask(self):
     #set up threads
     for x in range(0, self.nt):
       threads[x] = mrsThread(x,self)
-      #function used to fetch records
-      #threads[x].task = self.task
       #number of threads
       threads[x].nt = self.nt
       #records to fetch at once
@@ -89,7 +96,7 @@ def splitTask(self):
       threads[x].x = x
       #source table
       threads[x].src = self.src
-      #function used to process a record
+      #processor for a record
       threads[x].callback = self.callback
       if ('uuid' in dir(self)):
           threads[x].uuid = self.uuid
@@ -239,7 +246,7 @@ def bootstrap(self):
         'api_base': config['baseuri'] + '/fhir/'
     }
     smart = client.FHIRClient(settings=settings)
-    smart.server.session.auth=HTTPBasicAuth('admin','asVNTHdG1haUrNWb')
+    smart.server.session.auth=HTTPBasicAuth(config['OPENMRS_USER'],config['OPENMRS_PASS'])
     return()
 
 # load uuids into memory
@@ -542,7 +549,7 @@ def getAdmissionEvents(self, admission):
     child.filter =  {'hadm_id': admission.hadm_id}
     tables = [
         'chartevents','cptevents','datetimeevents','diagnoses_icd','drgcodes',
-        'labevents','inputevents_cv', 'inputevents_mv','labevents'
+        'labevents','inputevents_cv', 'inputevents_mv',
         'microbiologyevents','noteevents','outputevents','prescriptions',
         'procedureevents_mv','procedures_icd']
     admission_events = {}
@@ -550,8 +557,10 @@ def getAdmissionEvents(self, admission):
         admission_events[table] = []
         child.src = table
         cur = getSrc(child)
-        for record in cur:
-            admission_events[table].append(record)
+        names = [ x[0] for x in cur.description]
+        rows = cur.fetchall()
+        df = pd.DataFrame( rows, columns=names)
+        admission_events[table] = df
     return (admission_events)
 
 #load generate a uuid array for easy searching
@@ -733,43 +742,56 @@ def addPatient(self,record):
     }
     if(debug):
         print(patient)
-    uuid = create(Patient, patient)
+    #uuid = create(Patient, patient)
+    uuid = postDict('fhir', 'patient', patient)
     return(uuid)
 
 def addAdmissionEvents(self, admission):
     events = getAdmissionEvents(self, admission)
-    for table in events:
-        for event in events[table]:
-            try:
-                encounter_uuid = uuid_array['icustays'][event.icustay_id]
-            except Exception:
-                encounter_uuid = uuid_array['admissions'][event.hadm_id]
-                pass
-            try:
-                itemid = event.itemid
-            except Exception:
-                itemid = False
-                pass
-            try:
-                category = event.itemid
-            except Exception:
-                category = False
-                pass
-            if(table == 'chartevents'):
-                if(itemid == 917 and event.value):
-                    addDiagnosis(admission,event,admission.uuid)
-                elif((event.itemid == 220045 or event.itemid == 211) and event.valuenum):
-                    addObs(self,table,event,admission,encounter_uuid)
-            elif(table == 'noteevents' and event.category == 'Discharge summary'):
-                print('encounter_uuid');
-                print(encounter_uuid);
-                addObs(self,table,event,admission,encounter_uuid)
-
-# post admissions to openmrs fhir encounters interface
-#def handleTransfers(self,transfers):
-    #for transfer in transfers:
-    #    print(transfer)
-    
+    micro = mbEvents(events['microbiologyevents'])
+    print(micro)
+    #i=0
+    #for table in events:
+    #    i+=1
+    #    tn=table + '_' + str(time.time())
+    #    events[table].to_pickle('tmp/' +tn + '.pkl')
+#    print(events['microbiologyevents'])
+#    i=len(events['microbiologyevents'])
+#    j=len(events['microbiologyevents'][0])
+#    mbevents = np.zeros((i, j))
+#    print(i)
+#    print(j)
+    #for event in events['microbiologyevents']:
+    #    print(event)
+#        print(len(event))
+    #for table in events:
+    #    for event in events[table]:
+    #        try:
+    #            encounter_uuid = uuid_array['icustays'][event.icustay_id]
+    #        except Exception:
+    #            encounter_uuid = uuid_array['admissions'][event.hadm_id]
+    #            pass
+    #        try:
+    #            itemid = event.itemid
+    #        except Exception:
+    #            itemid = False
+    #            pass
+    #        try:
+    #            category = event.itemid
+    #        except Exception:
+    #            category = False
+    #            pass
+            #print(event)
+            #print(event)
+            #if(table == 'chartevents'):
+            #    if(itemid == 917 and event.value):
+            #        addDiagnosis(admission,event,admission.uuid)
+            #    elif((event.itemid == 220045 or event.itemid == 211) and event.valuenum):
+            #        addObs(self,table,event,admission,encounter_uuid)
+            #elif(table == 'noteevents' and event.category == 'Discharge summary'):
+            #    print('encounter_uuid');
+            #    print(encounter_uuid);
+            #    addObs(self,table,event,admission,encounter_uuid)
 
 def printAdmission(self,admission):
         print("processing admission: " + str(admission.hadm_id))
@@ -783,10 +805,10 @@ def addAdmission(self,record):
         print("processing admission: " + str(record.hadm_id))
         child = copy.copy(self) 
         admission_data = getAdmissionData(child, record)
-        # each admission generates a grandparent (visit encounter)
-        # a parent (admission encounter)
-        # and one or more icustay encounters
-        visit = Encounter.Encounter({
+        admit_date = deltaDate(record.admittime, record.offset)
+        disch_date = deltaDate(record.dischtime, record.offset)
+        # generate grandparent (visit encounter)
+        visit = {
             "resourceType":
             "Encounter",
             "status":
@@ -800,59 +822,52 @@ def addAdmission(self,record):
                 "id": record.patient_uuid,
             },
             "period": {
-                "start": deltaDate(record.admittime, record.offset),
-                "end": deltaDate(record.dischtime, record.offset)
+                "start": admit_date,
+                "end": disch_date
             },
             "location": [{
                 "location": {
                     "reference": "Location/" + record.admission_location_uuid,
                 },
                 "period": {
-                    "start": deltaDate(record.admittime, record.offset),
-                    "end": deltaDate(record.dischtime, record.offset)
+                    "start": admit_date,
+                    "end": disch_date
                 }
             }]
-        })
-        print(visit.as_json())
-        visit.create(smart.server)
-        visit_uuid = visit.id
-       
-#        visit_uuid = postDict('fhir', 'encounter', visit)
-        admission = Encounter.Encounter({
+        }
+        visit_uuid = postDict('fhir', 'encounter', visit)
+        # generate parent (admission encounter)
+        admission = {
             "resourceType":
             "Encounter",
             "status":
             "finished",
             "type": [{
                 "coding": [{
-#                    "display": "admission"
-                    "display": record.admission_type
-#                    "display": "Vitals"
+                    "display": "Vitals"
                 }]
             }],
             "subject": {
                 "id": record.patient_uuid,
             },
             "period": {
-                "start": deltaDate(record.admittime, record.offset),
-                "end": deltaDate(record.dischtime, record.offset)
+                "start": admit_date,
+                "end": disch_date
             },
             "location": [{
                 "location": {
                     "reference": "Location/" + record.admission_location_uuid,
                 },
                 "period": {
-                    "start": deltaDate(record.admittime, record.offset),
-                    "end": deltaDate(record.dischtime, record.offset)
+                    "start": admit_date,
+                    "end": disch_date
                 }
             }],
             "partOf": {
                 "reference": "Encounter/" + visit_uuid,
             }
-        })
-        admission.create(smart.server)
-        admission_uuid = admission.id
-#        admission_uuid = postDict('fhir', 'encounter', admission)
+        }
+        admission_uuid = postDict('fhir', 'encounter', admission)
         admission_cur = insertPgDict(child,'uuids', {
            'src': 'admissions',
            'row_id': record.row_id,
@@ -860,160 +875,129 @@ def addAdmission(self,record):
         })
         if (admission_uuid == False):
             return(False)
+        # add icustays
         for icustay in admission_data['icustays']:
-            if(icustay.outtime is None):
-                outtime = icustay.intime
-            else:
-                outtime = icustay.outtime
             print("processing stay: " + str(icustay.icustay_id))
-            icuenc = Encounter.Encounter({
+            start =  deltaDate(icustay.intime, record.offset)
+            if(icustay.outtime is None):
+                end = start
+            else:
+                end = deltaDate(icustay.outtime, record.offset)
+            icuenc = {
                 "resourceType": "Encounter",
                 "status": "finished",
                 "type": [{
                     "coding": [{
                         "display": "Vitals"
-   #                      "display": record.admission_type
                     }]
                 }],
                 "subject": {
                     "id": record.patient_uuid,
                 },
                 "period": {
-                    "start": deltaDate(icustay.intime, record.offset),
-                    "end": deltaDate(outtime, record.offset)
+                    "start": start,
+                    "end": end
                 },
                 "location": [{
                     "location": {
                         "reference": "Location/" + uuid_array['locations'][icustay.first_careunit],
                     },
                     "period": {
-                        "start": deltaDate(icustay.intime, record.offset),
-                        "end": deltaDate(outtime, record.offset)
+                        "start": start,
+                        "end": end
                     }
+                },{
+                    "location": {
+                        "reference": "Location/" + uuid_array['locations'][icustay.last_careunit],
+                    },
+                    "period": {
+                        "start": start,
+                        "end": end
+                    }
+                },{
                 }],
                 "partOf": {
                     "reference": "Encounter/" + visit_uuid,
                 }
-            })
-            icuenc_uuid = icuenc.id
-#            icuenc_uuid = postDict('fhir', 'encounter', icuenc)
+            }
+            icuenc_uuid = postDict('fhir', 'encounter', icuenc)
             icuuuid_cur = insertPgDict(child,'uuids', {
                'src': 'icustays',
                'row_id': icustay.row_id,
                'uuid': icuenc_uuid
             })
-#            icuuuid_cur.close()
+            icuuuid_cur.close()
+        # handle transfers
         for transfer in admission_data['transfers']:
-            #print(transfer)
             transenc = False
             current_unit = False
             previous_unit = False
             transenc = False
+            start = False
+            end = False
+            if(transfer.intime):
+                start = deltaDate(transfer.intime, record.offset)
+            else:
+                continue
+            if(transfer.outtime):
+                end = deltaDate(transfer.outtime, record.offset)
+            else:
+                end = start
             if(transfer.curr_careunit):
                 current_unit = "Location/" + uuid_array['locations'][transfer.curr_careunit]
             if(transfer.prev_careunit):
                 previous_unit = "Location/" + uuid_array['locations'][transfer.prev_careunit]
-            if(transfer.eventtype == 'transfer'):
-                transenc = {
-                    "resourceType": "Encounter",
-                    "status": "finished",
-                    "type": [{
-                         "coding": [{
-                             "display": "Transfer"
-                        }]
-                    }],
-                    "subject": {
+            if(transfer.eventtype == 'discharge'):
+                transfer_type = "Discharge"
+            elif(transfer.eventtype == 'admit'):
+                transfer_type = "Admission"
+            elif(transfer.eventtype == 'transfer'):
+                transfer_type = "Transfer"
+            else:
+                continue
+            transenc = {
+                "resourceType": "Encounter",
+                "status": "finished",
+                "subject": {
                     "id": record.patient_uuid,
-                    },
-                    "period": {
-                        "start": deltaDate(transfer.intime, record.offset),
-                        "end": deltaDate(transfer.outtime, record.offset)
-                    },
-                    "partOf": {
-                        "reference": "Encounter/" + visit_uuid,
-                    }
+                },
+                "period": {
+                    "start": start,
+                    "end": end
+                },
+                "partOf": {
+                    "reference": "Encounter/" + visit_uuid,
                 }
+            }
+            transenc["type"] = [{
+                         "coding": [{
+                             "display": transfer_type
+                        }]
+                    }]
+            if(previous_unit or current_unit):
+                transenc['location'] = []
                 if(current_unit):
-                    transenc['location'] = [{
+                    transenc['location'].append({
                         "location": {
                             "reference": current_unit,
                         },
                         "period": {
-                            "start": deltaDate(transfer.intime, record.offset),
-                            "end": deltaDate(transfer.outtime, record.offset)
+                            "start": start,
+                            "end": end
                         }
-                    }]
-#                    transuuid = postDict('fhir', 'encounter', transenc)
-                    transuuid = '567'
-            if(transfer.eventtype == 'discharge'):
-                transenc = {
-                    "resourceType": "Encounter",
-                    "status": "finished",
-                    "type": [{
-                         "coding": [{
-                             "display": "Discharge"
-                        }]
-                    }],
-                    "subject": {
-                    "id": record.patient_uuid,
-                    },
-                    "period": {
-                        "start": deltaDate(transfer.intime, record.offset),
-                        "end": deltaDate(transfer.intime, record.offset)
-                    },
-                    "partOf": {
-                        "reference": "Encounter/" + visit_uuid,
-                    }
-                }
+                    })
                 if(previous_unit):
-                    transenc['location'] = [{
+                    transenc['location'].append({
                         "location": {
                             "reference": previous_unit,
                         },
-#                        "period": {
-#                            "start": deltaDate(transfer.intime, record.offset),
-#                            "end": deltaDate(transfer.outtime, record.offset)
-#                        }
-                    }]
-                transuuid = '678'
-            #    transuuid = postDict('fhir', 'encounter', transenc)
-            if(transfer.eventtype == 'admit'):
-                transenc = {
-                    "resourceType": "Encounter",
-                    "status": "finished",
-                    "type": [{
-                         "coding": [{
-                             "display": "Admission"
-                        }]
-                    }],
-                    "subject": {
-                    "id": record.patient_uuid,
-                    },
-                    "period": {
-                        "start": deltaDate(transfer.intime, record.offset),
-                        "end": deltaDate(transfer.outtime, record.offset)
-                    },
-                    "partOf": {
-                        "reference": "Encounter/" + visit_uuid,
-                    }
-                }
-                if(current_unit):
-                    transenc['location'] = [{
-                        "location": {
-                            "reference": current_unit,
-                        },
                         "period": {
-                            "start": deltaDate(transfer.intime, record.offset),
-                            "end": deltaDate(transfer.outtime, record.offset)
+                            "start": start,
+                            "end": end
                         }
-                    }]
-                transuuid = '789'
-            #    transuuid = postDict('fhir', 'encounter', transenc)
-            #if(transenc):
-            #    transuuid = postDict('fhir', 'encounter', transenc)
-
-        #return(visit_uuid)
-        return(False)
+                    })
+            transuuid = postDict('fhir', 'encounter', transenc)
+        return(visit_uuid)
 
 #create a fhir observation for a mimic event
 def addObs(self,obs_type,obs,admission,encounter_uuid):
@@ -1466,3 +1450,32 @@ def conceptsToConcepts(self):
     setIncrementer(self, 'concept_name','21')
     setIncrementer(self, 'concept_description','1')
     self.pg_conn.commit()
+
+
+
+#post a json encoded record to the fhir/rest interface
+def mbEvents(df):
+    #set charttime to chartdate + 00:00:00 where blank
+    mask = pd.isna(df['charttime'])
+    df['charttime_imp'] = df['charttime']
+    df.loc[mask, 'charttime_imp'] = df['chartdate']
+    #iterate over specimens
+    specimens = df.groupby(['spec_itemid', 'charttime_imp','spec_type_desc'], as_index=False).sum()
+    specs = []
+    for index, s in specimens.iterrows():
+         #subset original data frame
+         df1 = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid)]
+         bact = df1.groupby(['org_name'], as_index=False).sum()
+         events = []
+         for i2, d in bact.iterrows():
+             bactname = d['org_name']
+             df2 = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid) & (df.org_name == d.org_name)]
+             resp = []
+             for i3, d3 in df2.iterrows():
+                 resp.append({'isolate_num':d3.isolate_num,'dilution':d3.dilution_text,'ab_name':d3.ab_name,'ab_itemid':d3.ab_itemid,'interpretation':d3.interpretation})
+             if hasattr(d, 'org_itemid'):
+                 events.append({'org_itemid':d.org_itemid,'org_name':d.org_name,'resp':resp})
+         specs.append({'subject_id':s.subject_id,'hadm_id':s.hadm_id,'charttime':s.charttime_imp,'spec_itemid':s.spec_itemid,'spec_type_desc':s.spec_type_desc,'events':events})
+         #for i2, d in df1.iterrows():
+         #   obs = {'spec_itemid':s.spec_itemid,'charttime_imp':s.charttime_imp} 
+    return(specs)

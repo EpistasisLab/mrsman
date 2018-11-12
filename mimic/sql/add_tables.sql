@@ -154,6 +154,24 @@ update concepts set num_records = num_records + num from  (select itemid,count(*
 update concepts set num_records = num_records + num from  (select itemid,count(*) num from mimiciii.labevents where value is not null group by itemid) counts where  concepts.itemid = counts.itemid and concepts.concept_type = 'test_text';
  update concepts set num_records = num_records + num from  (select icd9_code,count(*) num from mimiciii.diagnoses_icd group by icd9_code) counts where  concepts.icd9_code = counts.icd9_code and concepts.concept_type = 'icd_diagnosis';
 
+-- microbiology concepts
+create temporary table mb_concepts as select * from concepts limit 0;
+-- create concepts for organisms without an itemid
+insert into mb_concepts (itemid,shortname,concept_type,num_records)  (select org_itemid,org_name,'ORGANISM',count(*) from mimiciii.microbiologyevents where org_name is not null and org_itemid is null group by org_itemid,org_name);
+-- create concepts for specimens without an itemid
+insert into mb_concepts (itemid,shortname,concept_type,num_records)  (select spec_itemid,spec_type_desc,'SPECIMEN',count(*) from mimiciii.microbiologyevents where spec_type_desc is not null and spec_itemid is null group by spec_itemid,spec_type_desc);
+insert into mb_concepts (itemid,shortname,concept_type) (select itemid,label,category from mimiciii.d_items where linksto = 'microbiologyevents' and label is not null);
+update mb_concepts set longname = concat(shortname,' [',concept_type,'_',itemid,']') where itemid is not null;
+update mb_concepts set longname = concat(shortname,' [',concept_type,']') where itemid is null;
+update mb_concepts set concept_class_id = 1, concept_datatype_id = 4 where concept_type = 'ORGANISM';
+update mb_concepts set concept_class_id = 3, concept_datatype_id = 4 where concept_type = 'ANTIBACTERIUM';
+update mb_concepts set concept_class_id = 14, concept_datatype_id = 4 where concept_type = 'SPECIMEN';
+insert into concepts (itemid,shortname,longname,concept_type,concept_class_id,concept_datatype_id) (select itemid,shortname,longname,concept_type,concept_class_id,concept_datatype_id from mb_concepts);
+-- create drug concepts
+create temporary table drug_concepts as select drug from mimiciii.prescriptions group by drug;
+insert into drug_concepts (drug) (select drug_name_poe from mimiciii.prescriptions group by drug_name_poe);
+insert into drug_concepts (drug) (select drug_name_generic from mimiciii.prescriptions group by drug_name_generic);
+insert into concepts (shortname,longname,concept_type,concept_class_id,concept_datatype_id) (select drug,concat(drug,' [drug]'),'drug',3,4 from drug_concepts group by drug);
 
 -- cleanup
 delete from concepts where shortname is null;
@@ -161,5 +179,5 @@ delete from concepts where concept_type = 'test_num' and num_records = 0;
 delete from concepts where concept_type = 'test_text' and num_records = 0;
 delete from concepts where concept_type = 'icd_diagnosis' and num_records = 0;
 delete from concepts where concept_type = 'test_enum' and itemid not in (select itemid from cetxt_map);
---delete from concepts where concept_type = 'test_enum';
+-- delete from concepts where concept_type = 'test_enum';
 create view visits as select a.*,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,visittypes.row_id visit_type_code from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' where patient_uuid is not null order by subject_id;
