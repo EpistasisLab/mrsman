@@ -455,9 +455,9 @@ def loadPgsqlFile(self,filename):
 #post a json encoded record to the fhir/rest interface
 def postDict(endpoint, table, Dict):
     if (endpoint == 'fhir'):
-        uri = config['baseuri'] + "/fhir/" + table.capitalize()
+        uri = config['baseuri'] + "/fhir/" + table
     else:
-        uri = config['baseuri'] + "/rest/v1/" + table
+        uri = config['baseuri'] + "/rest/v1/" + table.lower()
     r = requests.post(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']),headers={'Connection':'close'},  stream=False)
     r.connection.close()
     if debug:
@@ -609,9 +609,12 @@ def getConcepts(self):
     concepts['answer'] = {}
     concepts['category'] = {}
     concepts['icd9_codes'] = {}
+    concepts['ANTIBACTERIUM'] = {}
+    concepts['SPECIMEN'] = {}
+    concepts['ORGANISM'] = {}
     for concept in cur:
       try:
-        if concept.concept_type in ['test_num','test_text','test_enum']:
+        if concept.concept_type in ['test_num','test_text','test_enum','SPECIMEN','ORGANISM','ANTIBACTERIUM']:
             concepts[concept.concept_type][concept.itemid] = concept.uuid
         elif concept.concept_type in ['diagnosis','answer','category']:
             concepts[concept.concept_type][concept.shortname] = concept.uuid
@@ -668,7 +671,7 @@ def addCaregiver(self,record):
     }
     if(debug):
         print(caregiver)
-    uuid = postDict('fhir', 'practitioner', caregiver)
+    uuid = postDict('fhir', 'Practitioner', caregiver)
     return(uuid)
 
 # delete then load a patient to openmrs fhir interface
@@ -743,13 +746,16 @@ def addPatient(self,record):
     if(debug):
         print(patient)
     #uuid = create(Patient, patient)
-    uuid = postDict('fhir', 'patient', patient)
+    uuid = postDict('fhir', 'Patient', patient)
     return(uuid)
 
 def addAdmissionEvents(self, admission):
     events = getAdmissionEvents(self, admission)
-    micro = mbEvents(events['microbiologyevents'])
-    print(micro)
+    mbReports = mbEvents(events['microbiologyevents'],admission)
+    for report in mbReports:
+        uuid = postDict('fhir', 'DiagnosticReport', report)
+        print(uuid)
+    #print(micro)
     #i=0
     #for table in events:
     #    i+=1
@@ -835,7 +841,7 @@ def addAdmission(self,record):
                 }
             }]
         }
-        visit_uuid = postDict('fhir', 'encounter', visit)
+        visit_uuid = postDict('fhir', 'Encounter', visit)
         # generate parent (admission encounter)
         admission = {
             "resourceType":
@@ -867,7 +873,7 @@ def addAdmission(self,record):
                 "reference": "Encounter/" + visit_uuid,
             }
         }
-        admission_uuid = postDict('fhir', 'encounter', admission)
+        admission_uuid = postDict('fhir', 'Encounter', admission)
         admission_cur = insertPgDict(child,'uuids', {
            'src': 'admissions',
            'row_id': record.row_id,
@@ -920,7 +926,7 @@ def addAdmission(self,record):
                     "reference": "Encounter/" + visit_uuid,
                 }
             }
-            icuenc_uuid = postDict('fhir', 'encounter', icuenc)
+            icuenc_uuid = postDict('fhir', 'Encounter', icuenc)
             icuuuid_cur = insertPgDict(child,'uuids', {
                'src': 'icustays',
                'row_id': icustay.row_id,
@@ -996,7 +1002,7 @@ def addAdmission(self,record):
                             "end": end
                         }
                     })
-            transuuid = postDict('fhir', 'encounter', transenc)
+            transuuid = postDict('fhir', 'Encounter', transenc)
         return(visit_uuid)
 
 #create a fhir observation for a mimic event
@@ -1088,7 +1094,7 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
             }
         elif(value_type == 'text'):
             observation["valueString"] = value
-        observation_uuid = postDict('fhir', 'observation', observation)
+        observation_uuid = postDict('fhir', 'Observation', observation)
         observation_cur = insertPgDict(self,'uuids', {
            'src': obs_type,
            'row_id': obs.row_id,
@@ -1141,7 +1147,7 @@ def addDiagnosis(admission,event,encounter_uuid):
         }
         }]
     }
-    encounter_uuid = postDict('fhir', 'encounter', note)
+    encounter_uuid = postDict('fhir', 'Encounter', note)
     certainty_json = {
         "resourceType": "Observation",
         "code": {
@@ -1230,9 +1236,9 @@ def addDiagnosis(admission,event,encounter_uuid):
             ]
         }
     }
-    order_uuid = postDict('fhir', 'observation', order_json)
-    diagnosis_uuid = postDict('fhir','observation',diagnosis_json)
-    certainty_uuid = postDict('fhir','observation',certainty_json)
+    order_uuid = postDict('fhir', 'Observation', order_json)
+    diagnosis_uuid = postDict('fhir','Observation',diagnosis_json)
+    certainty_uuid = postDict('fhir','Observation',certainty_json)
     obsgroup_json = {
         "resourceType": "Observation",
         "code": {
@@ -1275,7 +1281,7 @@ def addDiagnosis(admission,event,encounter_uuid):
             }
         ]
     }
-    obsgroup_uuid = postDict('fhir','observation',obsgroup_json)
+    obsgroup_uuid = postDict('fhir','Observation',obsgroup_json)
 
 # link enumerated concepts to their parent concepts
 def genConceptMap(self):
@@ -1301,7 +1307,7 @@ def locationsToLocations(self):
     for record in locations_cur:
         uuid = postDict(
             'fhir',
-            'location',
+            'Location',
             {
                 "resourceType": "Location",
                 #        "id": record.uuid,
@@ -1325,7 +1331,7 @@ def postEncounterTypes(self):
     for record in et_cur:
         uuid=postDict(
             'rest',
-            'encountertype',
+            'Encountertype',
             {
                 "name": record.encountertype,
                 "description": record.encountertype,
@@ -1451,31 +1457,140 @@ def conceptsToConcepts(self):
     setIncrementer(self, 'concept_description','1')
     self.pg_conn.commit()
 
-
-
 #post a json encoded record to the fhir/rest interface
-def mbEvents(df):
+def mbEvents(df,admission):
     #set charttime to chartdate + 00:00:00 where blank
     mask = pd.isna(df['charttime'])
     df['charttime_imp'] = df['charttime']
     df.loc[mask, 'charttime_imp'] = df['chartdate']
-    #iterate over specimens
+    #iterate over specimen-charttimes
     specimens = df.groupby(['spec_itemid', 'charttime_imp','spec_type_desc'], as_index=False).sum()
     specs = []
     for index, s in specimens.iterrows():
-         #subset original data frame
-         df1 = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid)]
-         bact = df1.groupby(['org_name'], as_index=False).sum()
+         spec_uuid = None
+         try:
+             spec_uuid = uuid_array['concepts']['SPECIMEN'][int(s.spec_itemid)]
+         except Exception as e:
+             print('epec error')
+             print(e)
+         #get original data for this spec
+         df_spec = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid)]
+         org = df_spec.groupby(['org_itemid','org_name'], as_index=False).sum()
          events = []
-         for i2, d in bact.iterrows():
-             bactname = d['org_name']
-             df2 = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid) & (df.org_name == d.org_name)]
+         for i2, o in org.iterrows():
+             df_org = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid) & (df.org_itemid == o.org_itemid)]
              resp = []
-             for i3, d3 in df2.iterrows():
-                 resp.append({'isolate_num':d3.isolate_num,'dilution':d3.dilution_text,'ab_name':d3.ab_name,'ab_itemid':d3.ab_itemid,'interpretation':d3.interpretation})
-             if hasattr(d, 'org_itemid'):
-                 events.append({'org_itemid':d.org_itemid,'org_name':d.org_name,'resp':resp})
-         specs.append({'subject_id':s.subject_id,'hadm_id':s.hadm_id,'charttime':s.charttime_imp,'spec_itemid':s.spec_itemid,'spec_type_desc':s.spec_type_desc,'events':events})
-         #for i2, d in df1.iterrows():
-         #   obs = {'spec_itemid':s.spec_itemid,'charttime_imp':s.charttime_imp} 
-    return(specs)
+             for i3, a in df_org.iterrows():
+                 antibiotic_uuid = None
+                 try:
+                     antibiotic_uuid = uuid_array['concepts']['ANTIBACTERIUM'][int(a.ab_itemid)]
+                 except Exception:
+                     pass
+                 resp.append({'isolate_num':a.isolate_num,'dilution_comparison':a.dilution_comparison,'dilution_value':a.dilution_value,'dilution_text':a.dilution_text,'ab_name':a.ab_name,'ab_itemid':a.ab_itemid,'antibiotic_uuid':antibiotic_uuid,'interpretation':a.interpretation})
+             organism_uuid = None
+             try:
+                 organism_uuid = uuid_array['concepts']['ORGANISM'][int(o.org_itemid)]
+             except Exception:
+                 pass
+             events.append({'org_itemid':o.org_itemid,'organism_uuid':organism_uuid,'org_name':o.org_name,'resp':resp})
+         charttime = deltaDate(s.charttime_imp, admission.offset)
+         specs.append({'patient_uuid':admission.patient_uuid,'admission_uuid':admission.uuid,'charttime':charttime,'spec_itemid':s.spec_itemid,'spec_type_desc':s.spec_type_desc,'spec_uuid':spec_uuid,'events':events})
+
+    diag_reports = []
+    for record in specs:
+        i=0
+        if len(events) > 0:
+          growth_detected = 'POS'
+        else:
+          growth_detected = 'NEG'
+        report = {
+            'resourceType': 'DiagnosticReport',
+            'status': 'final',
+            'issued': record['charttime'],
+            'effectiveDateTime':  record['charttime'],
+            'category': {
+                'coding': [{
+                    'system': 'http://hl7.org/fhir/v2/0074',
+                    'code': 'MB'
+                 }]
+            },
+            'subject':{
+                'reference': 'Patient/' + record['patient_uuid']
+            },
+            'contained': [{
+                'resourceType': "Observation",
+                'id': 'g0',
+                    'issued': record['charttime'],
+                    'effectiveDateTime':  record['charttime'],
+                    'status': 'final',
+                    'code': {
+                        'coding': [{
+                            'system': 'http://openmrs.org',
+                            'code': record['spec_uuid']
+                         }],
+                        'text': record['spec_type_desc']
+                    },
+                    'subject': {
+                        'reference': 'Patient/' + record['patient_uuid']
+                    },
+                    'valueString': growth_detected
+            }],
+            'result': [{
+                'reference': "#g0"
+            }]
+        }
+        if len(events) > 0:
+            #create a report for each detected organism
+            for event in record['events']:
+                i+=1
+                obs_id = 'org' + str(i);
+                org_obs = {
+                    'resourceType': 'Observation',
+                    'id': obs_id,
+                    'code': {
+                        'coding': [{
+                            'system': 'http://openmrs.org',
+                            "code": event['organism_uuid']
+                         }],
+                        "text": event['org_name']
+                     }
+                }
+                j = 0
+                related = []
+                for agent in event['resp']:
+                  if not agent['antibiotic_uuid'] == None:
+                    j+=1
+                    agent_id = 'org' + str(i) + '_agent' + str(j);
+                    agent_obs = {
+                        "resourceType": "Observation",
+                        "status": "final",
+                        "id": agent_id,
+                        "code": {
+                            "coding": [{
+                                "system": "http://openmrs.org",
+                                "code": agent['antibiotic_uuid']
+                             }],
+                            "text": agent['ab_name']
+                        },
+                        'subject': {
+                            'reference': "Patient/"+ record['patient_uuid']
+                        },
+                        'valueString': agent['dilution_text'],
+                        "interpretation": {
+                            "coding": [{
+                                "system": "http://hl7.org/fhir/v2/0078",
+                                "code": agent['interpretation']
+                        }]}
+                    }
+                    related.append({
+                        'type': "has-member",
+                        'target': {
+                            'reference': "#" + agent_id
+                        }
+                    })
+                    report['contained'].append(agent_obs)
+                if len(related) > 0:
+                    org_obs['related'] = related 
+                report['contained'].append(org_obs)
+        diag_reports.append(report)
+    return(diag_reports)

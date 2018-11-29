@@ -163,9 +163,9 @@ insert into mb_concepts (itemid,shortname,concept_type,num_records)  (select spe
 insert into mb_concepts (itemid,shortname,concept_type) (select itemid,label,category from mimiciii.d_items where linksto = 'microbiologyevents' and label is not null);
 update mb_concepts set longname = concat(shortname,' [',concept_type,'_',itemid,']') where itemid is not null;
 update mb_concepts set longname = concat(shortname,' [',concept_type,']') where itemid is null;
+update mb_concepts set concept_class_id = 1, concept_datatype_id = 3 where concept_type = 'ANTIBACTERIUM';
+update mb_concepts set concept_class_id = 1, concept_datatype_id = 3 where concept_type = 'SPECIMEN';
 update mb_concepts set concept_class_id = 1, concept_datatype_id = 4 where concept_type = 'ORGANISM';
-update mb_concepts set concept_class_id = 3, concept_datatype_id = 4 where concept_type = 'ANTIBACTERIUM';
-update mb_concepts set concept_class_id = 14, concept_datatype_id = 4 where concept_type = 'SPECIMEN';
 insert into concepts (itemid,shortname,longname,concept_type,concept_class_id,concept_datatype_id) (select itemid,shortname,longname,concept_type,concept_class_id,concept_datatype_id from mb_concepts);
 -- create drug concepts
 create temporary table drug_concepts as select drug from mimiciii.prescriptions group by drug;
