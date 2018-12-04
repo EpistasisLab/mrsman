@@ -133,13 +133,13 @@ def getSrc(self):
     if ('filter' in dir(self) and self.filter):
         Filter.update(self.filter)
     stmt = "select " + self.src + ".*"
-    if (uuid == 1):
+    if (uuid >= 1):
         stmt += ",uuids.uuid"
     if (deltadate):
         stmt += ",deltadate.offset from " + self.src + " left join deltadate on deltadate.subject_id = " + self.src + ".subject_id"
     else:
         stmt += " from " + self.src
-    if(uuid == 1):
+    if(uuid >= 1):
         stmt += " left join uuids on " + self.src + ".row_id = uuids.row_id and uuids.src = '" + self.src + "'"
     if(Filter):
         stmt += " where "
@@ -154,6 +154,8 @@ def getSrc(self):
           stmt +=  " where row_id not in (select row_id from uuids where src = '" + self.src + "')"
         if(uuid == 1):
           stmt +=  " where uuid is not null"
+        if(uuid == 2):
+          stmt +=  " where uuid is not null and state = 0"
     if(limit):
         stmt += " limit " + limit
     if debug:
@@ -1459,6 +1461,7 @@ def conceptsToConcepts(self):
 
 #post a json encoded record to the fhir/rest interface
 def mbEvents(df,admission):
+    encounter_uuid = uuid_array['visits'][admission.hadm_id]
     #set charttime to chartdate + 00:00:00 where blank
     mask = pd.isna(df['charttime'])
     df['charttime_imp'] = df['charttime']
@@ -1537,7 +1540,10 @@ def mbEvents(df,admission):
             }],
             'result': [{
                 'reference': "#g0"
-            }]
+            }],
+            "context": {
+                "reference": "Encounter/" + encounter_uuid,
+            }
         }
         if len(events) > 0:
             #create a report for each detected organism

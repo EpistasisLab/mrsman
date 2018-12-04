@@ -8,13 +8,12 @@ const fs = require('fs')
 const vorpal = require('vorpal')();
 const util = require('util')
 const path = require('path')
+const neo4j = require('neo4j-driver');
 const Objects = require('./model');
 const debug = false; 
 // configs
 var config = require('./config');
-
 // db
-var neo4j = require('neo4j-driver');
 var neo = neo4j.v1.driver(config.neo_uri, neo4j.v1.auth.basic(config.neo_user, config.neo_pass));
 
 
@@ -52,7 +51,7 @@ function readResource(resource) {
 
 
 
-
+//get a list of patients from the fhir server
 var getPatients = function() {
     var method = 'GET';
     var uri = config.url + '/fhir/Patient?active=true';
@@ -69,7 +68,7 @@ var getPatients = function() {
 
 
 
-//function to generate patient object from raw data
+//generate patient objects from raw data
 var processPatients = function(patients, i) {
     var deferred = Q.defer();
     if (i >= patients.length) {

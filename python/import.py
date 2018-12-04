@@ -120,7 +120,7 @@ class base ():
   def genEvents(self):
     mrsman.getUuids(self)
     self.deltadate = True
-    self.uuid = 1
+    self.uuid = 2
     self.src = 'visits'
     self.callback = mrsman.addAdmissionEvents
     if(self.num):
