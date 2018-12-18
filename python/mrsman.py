@@ -757,49 +757,6 @@ def addAdmissionEvents(self, admission):
     for report in mbReports:
         uuid = postDict('fhir', 'DiagnosticReport', report)
         print(uuid)
-    #print(micro)
-    #i=0
-    #for table in events:
-    #    i+=1
-    #    tn=table + '_' + str(time.time())
-    #    events[table].to_pickle('tmp/' +tn + '.pkl')
-#    print(events['microbiologyevents'])
-#    i=len(events['microbiologyevents'])
-#    j=len(events['microbiologyevents'][0])
-#    mbevents = np.zeros((i, j))
-#    print(i)
-#    print(j)
-    #for event in events['microbiologyevents']:
-    #    print(event)
-#        print(len(event))
-    #for table in events:
-    #    for event in events[table]:
-    #        try:
-    #            encounter_uuid = uuid_array['icustays'][event.icustay_id]
-    #        except Exception:
-    #            encounter_uuid = uuid_array['admissions'][event.hadm_id]
-    #            pass
-    #        try:
-    #            itemid = event.itemid
-    #        except Exception:
-    #            itemid = False
-    #            pass
-    #        try:
-    #            category = event.itemid
-    #        except Exception:
-    #            category = False
-    #            pass
-            #print(event)
-            #print(event)
-            #if(table == 'chartevents'):
-            #    if(itemid == 917 and event.value):
-            #        addDiagnosis(admission,event,admission.uuid)
-            #    elif((event.itemid == 220045 or event.itemid == 211) and event.valuenum):
-            #        addObs(self,table,event,admission,encounter_uuid)
-            #elif(table == 'noteevents' and event.category == 'Discharge summary'):
-            #    print('encounter_uuid');
-            #    print(encounter_uuid);
-            #    addObs(self,table,event,admission,encounter_uuid)
 
 def printAdmission(self,admission):
         print("processing admission: " + str(admission.hadm_id))
@@ -1502,10 +1459,18 @@ def mbEvents(df,admission):
     diag_reports = []
     for record in specs:
         i=0
-        if len(events) > 0:
+        if len(record['events']) > 0:
           growth_detected = 'POS'
         else:
           growth_detected = 'NEG'
+        interpretation = {
+            "coding": [
+                {
+                    "system": "http://hl7.org/fhir/v2/0078",
+                    "code": growth_detected
+                }
+            ]
+        }
         report = {
             'resourceType': 'DiagnosticReport',
             'status': 'final',
@@ -1520,24 +1485,7 @@ def mbEvents(df,admission):
             'subject':{
                 'reference': 'Patient/' + record['patient_uuid']
             },
-            'contained': [{
-                'resourceType': "Observation",
-                'id': 'g0',
-                    'issued': record['charttime'],
-                    'effectiveDateTime':  record['charttime'],
-                    'status': 'final',
-                    'code': {
-                        'coding': [{
-                            'system': 'http://openmrs.org',
-                            'code': record['spec_uuid']
-                         }],
-                        'text': record['spec_type_desc']
-                    },
-                    'subject': {
-                        'reference': 'Patient/' + record['patient_uuid']
-                    },
-                    'valueString': growth_detected
-            }],
+            'contained': [],
             'result': [{
                 'reference': "#g0"
             }],
@@ -1545,7 +1493,26 @@ def mbEvents(df,admission):
                 "reference": "Encounter/" + encounter_uuid,
             }
         }
-        if len(events) > 0:
+        g = {
+            'resourceType': "Observation",
+            'id': 'g0',
+                'issued': record['charttime'],
+                'effectiveDateTime':  record['charttime'],
+                'status': 'final',
+                'code': {
+                    'coding': [{
+                        'system': 'http://openmrs.org',
+                        'code': record['spec_uuid']
+                     }],
+                    'text': record['spec_type_desc']
+                },
+                'subject': {
+                    'reference': 'Patient/' + record['patient_uuid']
+                },
+                'interpretation': interpretation
+        }
+        g_related = []
+        if len(record['events']) > 0:
             #create a report for each detected organism
             for event in record['events']:
                 i+=1
@@ -1561,12 +1528,21 @@ def mbEvents(df,admission):
                         "text": event['org_name']
                      }
                 }
+                g_related.append({
+                    'type': "has-member",
+                    'target': {
+                        'reference': "#" + obs_id
+                    }
+                })
                 j = 0
-                related = []
+                org_related = []
                 for agent in event['resp']:
                   if not agent['antibiotic_uuid'] == None:
                     j+=1
                     agent_id = 'org' + str(i) + '_agent' + str(j);
+                    dilution_text = agent['dilution_text']
+                    if dilution_text is None:
+                      dilution_text = 'NA'
                     agent_obs = {
                         "resourceType": "Observation",
                         "status": "final",
@@ -1581,22 +1557,25 @@ def mbEvents(df,admission):
                         'subject': {
                             'reference': "Patient/"+ record['patient_uuid']
                         },
-                        'valueString': agent['dilution_text'],
+                        'valueString': dilution_text,
                         "interpretation": {
                             "coding": [{
                                 "system": "http://hl7.org/fhir/v2/0078",
                                 "code": agent['interpretation']
                         }]}
                     }
-                    related.append({
+                    org_related.append({
                         'type': "has-member",
                         'target': {
                             'reference': "#" + agent_id
                         }
                     })
                     report['contained'].append(agent_obs)
-                if len(related) > 0:
-                    org_obs['related'] = related 
+                if len(org_related) > 0:
+                    org_obs['related'] = org_related 
                 report['contained'].append(org_obs)
+        if len(g_related) > 0:
+            g['related'] = g_related 
+        report['contained'].append(g)
         diag_reports.append(report)
     return(diag_reports)
