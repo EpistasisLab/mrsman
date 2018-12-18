@@ -496,7 +496,6 @@ def putDict(endpoint, table, Dict, new_uuid):
     r = requests.put(uri, json=Dict, auth=HTTPBasicAuth(config['OPENMRS_USER'], config['OPENMRS_PASS']))
     if debug:
         print(Dict)
-    print(r.status_code)
     if ("Location" in r.headers):
         return (r.headers['Location'].split('/').pop())
     elif (r.status_code == 200) :
@@ -753,10 +752,32 @@ def addPatient(self,record):
 
 def addAdmissionEvents(self, admission):
     events = getAdmissionEvents(self, admission)
-    mbReports = mbEvents(events['microbiologyevents'],admission)
-    for report in mbReports:
-        uuid = postDict('fhir', 'DiagnosticReport', report)
-        print(uuid)
+    for table in events:
+        if(table == 'microbiologyevents'):
+            mbReports = mbEvents(events['microbiologyevents'],admission)
+        else:
+            for index, event in events[table].iterrows():
+                try:
+                    encounter_uuid = uuid_array['icustays'][event.icustay_id]
+                except Exception:
+                    encounter_uuid = uuid_array['admissions'][event.hadm_id]
+                    pass
+                try:
+                    itemid = event.itemid
+                except Exception:
+                    itemid = False
+                    pass
+                try:
+                    category = event.itemid
+                except Exception:
+                    category = False
+                    pass
+                if(table == 'chartevents' and itemid == 917):
+                    addDiagnosis(admission,event,admission.uuid)
+                else:
+                    addObs(self,table,event,admission,encounter_uuid)
+
+
 
 def printAdmission(self,admission):
         print("processing admission: " + str(admission.hadm_id))
@@ -784,7 +805,7 @@ def addAdmission(self,record):
                 }]
             }],
             "subject": {
-                "id": record.patient_uuid,
+                "reference": "Patient/" + record.patient_uuid
             },
             "period": {
                 "start": admit_date,
@@ -813,7 +834,7 @@ def addAdmission(self,record):
                 }]
             }],
             "subject": {
-                "id": record.patient_uuid,
+                "reference": "Patient/" + record.patient_uuid
             },
             "period": {
                 "start": admit_date,
@@ -857,7 +878,7 @@ def addAdmission(self,record):
                     }]
                 }],
                 "subject": {
-                    "id": record.patient_uuid,
+                    "reference": "Patient/" + record.patient_uuid
                 },
                 "period": {
                     "start": start,
@@ -924,7 +945,7 @@ def addAdmission(self,record):
                 "resourceType": "Encounter",
                 "status": "finished",
                 "subject": {
-                    "id": record.patient_uuid,
+                    "reference": "Patient/" + record.patient_uuid
                 },
                 "period": {
                     "start": start,
@@ -973,37 +994,38 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
     value_type = False
     events_tables = [
         'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
-        'inputevents_mv','labevents','microbiologyevents','noteevents',
+        'inputevents_mv','labevents','noteevents',
         'outputevents','procedureevents_mv','procedures_icd'
     ]
     if(obs_type in ('outputevents','procedureevents_mv')):
         value_type = 'numeric'
-        value = obs.value
+        if not pd.isna(obs.value):
+            value = obs.value
         units = obs.valueuom
-        concept_uuid = uuid_array['concepts'][obs.itemid]
+        concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
     elif(obs_type in ('inputevents_cv','inputevents_mv')):
         value_type = 'numeric'
-        if(obs.amount):
+        if not pd.isna(obs.amount):
             value = obs.amount
             units = obs.amountuom
-        elif(obs.rate):
+        elif not pd.isna(obs.rate):
             value = obs.rate
             units = obs.rateuom
-        elif(obs.originalamount):
+        elif not pd.isna(obs.originalamount):
             value = obs.originalamount
             units = obs.originalamountuom
-        elif(obs.originalrate):
+        elif not pd.isna(obs.originalrate):
             value = obs.originalrate
             units = obs.originalrateuom
         concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
     elif(obs_type in ('chartevents','labevents')):
-        if(obs.valuenum):
+        if not pd.isna(obs.valuenum):
             value_type = 'numeric'
             value = obs.valuenum
             concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
             if(obs.valueuom):
                 units = obs.valueuom
-        elif(obs.value):
+        elif not pd.isna(obs.value):
             value_type = 'text'
             value = obs.value
             concept_uuid = uuid_array['concepts']['test_text'][obs.itemid]
@@ -1012,18 +1034,18 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
         concept_uuid =uuid_array['concepts']['category'][obs.category]
         value = obs.text
     try:
-        if(obs.charttime):
+        if not pd.isna(obs.charttime):
             date = obs.charttime
     except Exception:
         pass
     try:
-        if(obs.starttime):
+        if not pd.isna(obs.starttime):
             date = obs.starttime
     except Exception:
         pass
-    if(not date):
+    if not date:
         try:
-            if(obs.chartdate):
+            if not pd.isna(obs.chartdate):
                 date = obs.chartdate
         except Exception:
             pass
@@ -1037,7 +1059,7 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
                  }]
             },
             "subject": {
-                "id": admission.patient_uuid,
+                'reference': 'Patient/' + admission.patient_uuid
             },
             "context": {
                 "reference": "Encounter/" + encounter_uuid,
@@ -1082,7 +1104,8 @@ def addDiagnosis(admission,event,encounter_uuid):
             }]
         }],
         "subject": {
-            "id": admission.patient_uuid,
+            #"reference": "Patient/" + admission.patient_uuid
+            "id":  admission.patient_uuid
         },
         "period": {
             "start": deltaDate(admission.admittime, admission.offset),
@@ -1123,7 +1146,7 @@ def addDiagnosis(admission,event,encounter_uuid):
             }
         ],
         "subject": {
-            "id": admission.patient_uuid,
+            "reference": "Patient/" + admission.patient_uuid
         },
         "context": {
             "reference": "Encounter/" + encounter_uuid,
@@ -1155,7 +1178,7 @@ def addDiagnosis(admission,event,encounter_uuid):
             }
         ],
         "subject": {
-            "id": admission.patient_uuid,
+            "reference": "Patient/" + admission.patient_uuid
         },
         "context": {
             "reference": "Encounter/" + encounter_uuid,
@@ -1180,7 +1203,7 @@ def addDiagnosis(admission,event,encounter_uuid):
             }
         ],
         "subject": {
-            "id": admission.patient_uuid,
+            "reference": "Patient/" + admission.patient_uuid
         },
         "context": {
             "reference": "Encounter/" + encounter_uuid,
@@ -1212,7 +1235,7 @@ def addDiagnosis(admission,event,encounter_uuid):
             }
         ],
         "subject": {
-            "id": admission.patient_uuid,
+            "reference": "Patient/" + admission.patient_uuid
         },
         "context": {
             "reference": "Encounter/" + encounter_uuid,

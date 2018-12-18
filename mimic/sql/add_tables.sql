@@ -4,7 +4,8 @@ CREATE TABLE uuids
 (
   uuid uuid,
   src character(32),
-  row_id integer
+  row_id integer,
+  state smallint default 0
 )
 WITH (
   OIDS=FALSE

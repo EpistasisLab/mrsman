@@ -5,6 +5,7 @@
   "description": "OpenMRS interface scripts",
   "license": "MIT",
   "dependencies": {
+    "@asymmetrik/node-fhir-server-core": "git+https://github.com/Asymmetrik/node-fhir-server-core.git",
     "awcm": "^1.1.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.8.5",
