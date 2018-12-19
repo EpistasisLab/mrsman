@@ -805,7 +805,8 @@ def addAdmission(self,record):
                 }]
             }],
             "subject": {
-                "reference": "Patient/" + record.patient_uuid
+               #"reference": "Patient/" + record.patient_uuid
+                "id": record.patient_uuid
             },
             "period": {
                 "start": admit_date,
@@ -834,7 +835,8 @@ def addAdmission(self,record):
                 }]
             }],
             "subject": {
-                "reference": "Patient/" + record.patient_uuid
+                #"reference": "Patient/" + record.patient_uuid
+                "id": record.patient_uuid
             },
             "period": {
                 "start": admit_date,
@@ -878,7 +880,8 @@ def addAdmission(self,record):
                     }]
                 }],
                 "subject": {
-                    "reference": "Patient/" + record.patient_uuid
+                #    "reference": "Patient/" + record.patient_uuid
+                    "id": record.patient_uuid
                 },
                 "period": {
                     "start": start,
@@ -945,7 +948,8 @@ def addAdmission(self,record):
                 "resourceType": "Encounter",
                 "status": "finished",
                 "subject": {
-                    "reference": "Patient/" + record.patient_uuid
+                   # "reference": "Patient/" + record.patient_uuid
+                    "id": record.patient_uuid
                 },
                 "period": {
                     "start": start,
@@ -1104,8 +1108,7 @@ def addDiagnosis(admission,event,encounter_uuid):
             }]
         }],
         "subject": {
-            #"reference": "Patient/" + admission.patient_uuid
-            "id":  admission.patient_uuid
+            'id': admission.patient_uuid
         },
         "period": {
             "start": deltaDate(admission.admittime, admission.offset),
