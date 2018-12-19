@@ -772,7 +772,7 @@ def addAdmissionEvents(self, admission):
                 except Exception:
                     category = False
                     pass
-                if(table == 'chartevents' and itemid == 917):
+                if(table == 'chartevents' and itemid == 917 and not pd.isna(event.value)):
                     addDiagnosis(admission,event,admission.uuid)
                 else:
                     addObs(self,table,event,admission,encounter_uuid)
