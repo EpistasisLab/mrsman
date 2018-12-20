@@ -11,6 +11,7 @@
     "blessed-contrib": "^4.8.5",
     "cypher-stream": "^1.1.0",
     "fast-csv": "^2.4.1",
+    "http-proxy": "^1.17.0",
     "json-to-cypher": "^1.0.0",
     "luhn-mod-n": "^1.0.1",
     "mysql": "^2.15.0",

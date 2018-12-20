@@ -127,8 +127,8 @@ class base ():
         mrsman.numThreads = 1
         self.filter = {'hadm_id':self.num}
     else:
-        #mrsman.numThreads = 50
-        mrsman.numThreads = 1
+        mrsman.numThreads = 50
+        #mrsman.numThreads = 1
     self.num = False
     mrsman.runTask(self)
   #

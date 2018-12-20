@@ -700,11 +700,11 @@ def deletePatient(self,subject_id):
     admission.src = 'admissions'
     admission_cur = getSrc(admission)
     for record in admission_cur:
-#            deletePgDict(admission, 'uuids',{
-#                'src':admission.src,
-#                'row_id':record.row_id
-#            })
-        print(record)
+            deletePgDict(admission, 'uuids',{
+                'src':admission.src,
+                'row_id':record.row_id
+            })
+            print(record)
     self.pg_conn.commit()
 
 def addPatient(self,record):
