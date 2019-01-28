@@ -25,7 +25,6 @@ class base ():
             i += 1
         self.num = num
         self.arg = arg
-        print(arg)
         mrsman.debug = debug
         if(func):
             func(self)

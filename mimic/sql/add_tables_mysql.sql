@@ -7,7 +7,7 @@ CREATE TABLE `obs_queue` (
   `concept_uuid` char(38) NOT NULL,
   `patient_uuid` char(38) NOT NULL,
   `encounter_uuid` char(38) NOT NULL,
-  `src` char(16) NOT NULL,
-  `row_id` integer() NOT NULL
+  `src` char(24) NOT NULL,
+  `row_id` int(11) NOT NULL
 );
 

@@ -552,11 +552,10 @@ def getEvents(self, admission):
     child.limit = False
     child.filter =  {'hadm_id': admission.hadm_id}
     tables = [
-#        'chartevents','labevents',
-#        'labevents','inputevents_cv', 'inputevents_mv',
-#        'noteevents','outputevents',
-#        'procedureevents_mv','procedures_icd']
-'procedures_icd']
+        'chartevents',
+        'labevents','inputevents_cv', 'inputevents_mv',
+        'noteevents','outputevents',
+        'procedureevents_mv','procedures_icd']
     admission_events = {}
     for table in tables:
       if not self.arg or (self.arg == table):
@@ -769,30 +768,50 @@ def addPatient(self,record):
     return(uuid)
 
 def addEvents(self, admission):
-    events = getEvents(self, admission)
-    for table in events:
-        for index, event in events[table].iterrows():
-            try:
-                encounter_uuid = uuid_array['icustays'][event.icustay_id]
-            except Exception:
-                encounter_uuid = uuid_array['admissions'][event.hadm_id]
-                pass
-            try:
-                itemid = event.itemid
-            except Exception:
-                itemid = False
-                pass
-            try:
-                category = event.itemid
-            except Exception:
-                category = False
-                pass
-            if(table == 'chartevents' and itemid == 917 and not pd.isna(event.value)):
-                addDiagnosis(admission,event,admission.uuid)
-                addObs(self,table,event,admission,encounter_uuid)
-            else:
-                addObs(self,table,event,admission,encounter_uuid)
-    self.mysql_conn.commit()
+    imported = False
+    #check to see if import was previously run
+    child_1 = copy.copy(self); 
+    child_1.deltadate = False
+    child_1.uuid = 0;
+    child_1.src = 'process_queue';
+    child_1.filter =  {'row_id': admission.row_id, 'src': 'visits'}
+    cur_1 = getSrc(child_1)
+    rows = cur_1.fetchall()
+    if len(rows) > 0:
+        imported = True 
+    if not imported:
+        process = {
+             "src": "visits",
+             "row_id": admission.row_id,
+             "process_type": "addEvents",
+             "state": 0
+        }
+        events = getEvents(self, admission)
+        for table in events:
+            for index, event in events[table].iterrows():
+                try:
+                    encounter_uuid = uuid_array['icustays'][event.icustay_id]
+                except Exception:
+                    encounter_uuid = uuid_array['admissions'][event.hadm_id]
+                    pass
+                try:
+                    itemid = event.itemid
+                except Exception:
+                    itemid = False
+                    pass
+                try:
+                    category = event.itemid
+                except Exception:
+                    category = False
+                    pass
+                if(table == 'chartevents' and itemid == 917 and not pd.isna(event.value)):
+                    addDiagnosis(admission,event,admission.uuid)
+                    addObs(self,table,event,admission,encounter_uuid)
+                else:
+                    addObs(self,table,event,admission,encounter_uuid)
+        insertPgDict(self,'process_queue',process);
+        self.pg_conn.commit()
+        self.mysql_conn.commit()
 
 def addMbEvents(self, admission):
     events = getMbEvents(self, admission)
