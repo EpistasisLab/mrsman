@@ -3,9 +3,9 @@ FROM openjdk:8-jre-alpine
 RUN addgroup -S neo4j && adduser -S -H -h /var/lib/neo4j -G neo4j neo4j
 
 ENV NEO4J_SHA256=c603da37a6102252d91328aec4b018ccff417588c29b6888d7260a0840135a3b \
-    NEO4J_TARBALL=neo4j-community-3.3.5-unix.tar.gz \
+    NEO4J_TARBALL=neo4j-community-3.5.1-unix.tar.gz \
     NEO4J_EDITION=community
-ARG NEO4J_URI=http://dist.neo4j.org/neo4j-community-3.3.5-unix.tar.gz
+ARG NEO4J_URI=http://dist.neo4j.org/neo4j-community-3.5.1-unix.tar.gz
 
 COPY ./local-package/* /tmp/
 

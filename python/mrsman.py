@@ -32,6 +32,7 @@ saveFiles = True
 exitFlag = False
 shiftDates = True
 config_file = 'config.json'
+create_omrs_obs = False
 
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, o):
@@ -98,6 +99,8 @@ def splitTask(self):
       threads[x].src = self.src
       #processor for a record
       threads[x].callback = self.callback
+      #
+      threads[x].arg = self.arg
       if ('uuid' in dir(self)):
           threads[x].uuid = self.uuid
       if ('deltadate' in dir(self)):
@@ -543,18 +546,20 @@ def getAdmissionData(self, admission):
     return (admission_data)
 
 # load observation events admission related tables
-def getAdmissionEvents(self, admission):
+def getEvents(self, admission):
     child = copy.copy(self)
     child.uuid = -1
     child.limit = False
     child.filter =  {'hadm_id': admission.hadm_id}
     tables = [
-        'chartevents','cptevents','datetimeevents','diagnoses_icd','drgcodes',
-        'labevents','inputevents_cv', 'inputevents_mv',
-        'microbiologyevents','noteevents','outputevents','prescriptions',
-        'procedureevents_mv','procedures_icd']
+#        'chartevents','labevents',
+#        'labevents','inputevents_cv', 'inputevents_mv',
+#        'noteevents','outputevents',
+#        'procedureevents_mv','procedures_icd']
+'procedures_icd']
     admission_events = {}
     for table in tables:
+      if not self.arg or (self.arg == table):
         admission_events[table] = []
         child.src = table
         cur = getSrc(child)
@@ -563,6 +568,19 @@ def getAdmissionEvents(self, admission):
         df = pd.DataFrame( rows, columns=names)
         admission_events[table] = df
     return (admission_events)
+
+# load observation events admission related tables
+def getMbEvents(self, admission):
+    child = copy.copy(self)
+    child.uuid = -1
+    child.limit = False
+    child.filter =  {'hadm_id': admission.hadm_id}
+    child.src = 'microbiologyevents'
+    cur = getSrc(child)
+    names = [ x[0] for x in cur.description]
+    rows = cur.fetchall()
+    df = pd.DataFrame( rows, columns=names)
+    return (df)
 
 #load generate a uuid array for easy searching
 def genIndex(self):
@@ -750,32 +768,38 @@ def addPatient(self,record):
     uuid = postDict('fhir', 'Patient', patient)
     return(uuid)
 
-def addAdmissionEvents(self, admission):
-    events = getAdmissionEvents(self, admission)
+def addEvents(self, admission):
+    events = getEvents(self, admission)
     for table in events:
-        if(table == 'microbiologyevents'):
-            mbReports = mbEvents(events['microbiologyevents'],admission)
-        else:
-            for index, event in events[table].iterrows():
-                try:
-                    encounter_uuid = uuid_array['icustays'][event.icustay_id]
-                except Exception:
-                    encounter_uuid = uuid_array['admissions'][event.hadm_id]
-                    pass
-                try:
-                    itemid = event.itemid
-                except Exception:
-                    itemid = False
-                    pass
-                try:
-                    category = event.itemid
-                except Exception:
-                    category = False
-                    pass
-                if(table == 'chartevents' and itemid == 917 and not pd.isna(event.value)):
-                    addDiagnosis(admission,event,admission.uuid)
-                else:
-                    addObs(self,table,event,admission,encounter_uuid)
+        for index, event in events[table].iterrows():
+            try:
+                encounter_uuid = uuid_array['icustays'][event.icustay_id]
+            except Exception:
+                encounter_uuid = uuid_array['admissions'][event.hadm_id]
+                pass
+            try:
+                itemid = event.itemid
+            except Exception:
+                itemid = False
+                pass
+            try:
+                category = event.itemid
+            except Exception:
+                category = False
+                pass
+            if(table == 'chartevents' and itemid == 917 and not pd.isna(event.value)):
+                addDiagnosis(admission,event,admission.uuid)
+                addObs(self,table,event,admission,encounter_uuid)
+            else:
+                addObs(self,table,event,admission,encounter_uuid)
+    self.mysql_conn.commit()
+
+def addMbEvents(self, admission):
+    events = getMbEvents(self, admission)
+    mbReports = mbEvents(events,admission)
+    for report in mbReports:
+        uuid = postDict('fhir', 'DiagnosticReport', report)
+    self.pg_conn.commit()
 
 
 
@@ -990,17 +1014,12 @@ def addAdmission(self,record):
         return(visit_uuid)
 
 #create a fhir observation for a mimic event
-def addObs(self,obs_type,obs,admission,encounter_uuid):
+def addFhirObs(self,obs_type,obs,admission,encounter_uuid):
     value = False
     units = False
     date = False
     concept_uuid = False
     value_type = False
-    events_tables = [
-        'chartevents','cptevents','datetimeevents','labevents','inputevents_cv',
-        'inputevents_mv','labevents','noteevents',
-        'outputevents','procedureevents_mv','procedures_icd'
-    ]
     if(obs_type in ('outputevents','procedureevents_mv')):
         value_type = 'numeric'
         if not pd.isna(obs.value):
@@ -1053,7 +1072,7 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
                 date = obs.chartdate
         except Exception:
             pass
-    if(concept_uuid and value and value_type):
+    if(concept_uuid and not pd.isna(value) and not value is False and value_type):
         observation = {
             "resourceType": "Observation",
             "code": {
@@ -1079,13 +1098,98 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
             }
         elif(value_type == 'text'):
             observation["valueString"] = value
-        observation_uuid = postDict('fhir', 'Observation', observation)
-        observation_cur = insertPgDict(self,'uuids', {
-           'src': obs_type,
-           'row_id': obs.row_id,
-           'uuid': observation_uuid
-        })
-        self.pg_conn.commit()
+        if(create_omrs_obs):
+            observation_uuid = postDict('fhir', 'Observation', observation)
+            observation_cur = insertPgDict(self,'uuids', {
+               'src': obs_type,
+               'row_id': obs.row_id,
+               'uuid': observation_uuid
+            })
+            return(observation_uuid)
+        else:
+            observation_uuid = str(uuid.uuid4())
+            save_json('Observation',observation_uuid,observation)
+            return(observation_uuid)
+    else:
+        print('skipping:')
+        print([obs_type,concept_uuid,value_type,value,units,date,obs.row_id])
+        return(None)
+#create a fhir observation for a mimic event
+def addObs(self,obs_type,obs,admission,encounter_uuid):
+    value = False
+    units = False
+    date = False
+    concept_uuid = False
+    value_type = False
+    if(obs_type in ('outputevents','procedureevents_mv')):
+        value_type = 'numeric'
+        if not pd.isna(obs.value):
+            value = obs.value
+        units = obs.valueuom
+        concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
+    elif(obs_type in ('inputevents_cv','inputevents_mv')):
+        value_type = 'numeric'
+        if not pd.isna(obs.amount):
+            value = obs.amount
+            units = obs.amountuom
+        elif not pd.isna(obs.rate):
+            value = obs.rate
+            units = obs.rateuom
+        elif not pd.isna(obs.originalamount):
+            value = obs.originalamount
+            units = obs.originalamountuom
+        elif not pd.isna(obs.originalrate):
+            value = obs.originalrate
+            units = obs.originalrateuom
+        concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
+    elif(obs_type in ('chartevents','labevents')):
+        if not pd.isna(obs.valuenum):
+            value_type = 'numeric'
+            value = obs.valuenum
+            concept_uuid = uuid_array['concepts']['test_num'][obs.itemid]
+            if(obs.valueuom):
+                units = obs.valueuom
+        elif not pd.isna(obs.value):
+            value_type = 'text'
+            value = obs.value
+            concept_uuid = uuid_array['concepts']['test_text'][obs.itemid]
+    elif(obs_type == 'noteevents'):
+        value_type = 'text'
+        concept_uuid =uuid_array['concepts']['category'][obs.category]
+        value = obs.text
+    try:
+        if not pd.isna(obs.charttime):
+            date = obs.charttime
+    except Exception:
+        pass
+    try:
+        if not pd.isna(obs.starttime):
+            date = obs.starttime
+    except Exception:
+        pass
+    if not date:
+        try:
+            if not pd.isna(obs.chartdate):
+                date = obs.chartdate
+        except Exception:
+            pass
+    if(concept_uuid and not pd.isna(value) and not value is False and value_type):
+        observation_uuid = str(uuid.uuid4())
+        observation = {
+                'observation_uuid': observation_uuid,
+                'concept_uuid': concept_uuid,
+                'patient_uuid': admission.patient_uuid,
+                'encounter_uuid': encounter_uuid,
+                'src': obs_type,
+                'row_id': obs.row_id,
+        }
+        if(date):
+            observation["obs_datetime"] =  deltaDate(date, admission.offset)
+        if(value_type == 'numeric'):
+            observation["value_numeric"] = value
+        elif(value_type == 'text'):
+            observation["value_text"] = value
+        insertDict(self,'obs_queue',observation);
         return(observation_uuid)
     else:
         print('skipping:')

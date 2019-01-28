@@ -8,6 +8,7 @@ class base ():
         #run function from cli
         func = False
         num = False
+        arg = False
         debug = False
         i = 1
         while i < len(sys.argv):
@@ -17,10 +18,14 @@ class base ():
                 debug = True
             elif(sys.argv[i] == '-a'):
                 mrsman.config_file = 'ann.json'
+            elif(i > 1 and sys.argv[i].isalpha()):
+                arg = sys.argv[i]
             else:
                 func = eval("base." + sys.argv[i])
             i += 1
         self.num = num
+        self.arg = arg
+        print(arg)
         mrsman.debug = debug
         if(func):
             func(self)
@@ -122,7 +127,22 @@ class base ():
     self.deltadate = True
     self.uuid = 2
     self.src = 'visits'
-    self.callback = mrsman.addAdmissionEvents
+    self.callback = mrsman.addEvents
+    if(self.num):
+        mrsman.numThreads = 1
+        self.filter = {'hadm_id':self.num}
+    else:
+        mrsman.numThreads = 50
+    self.num = False
+    mrsman.runTask(self)
+  #
+  #fhir based observations
+  def genMbEvents(self):
+    mrsman.getUuids(self)
+    self.deltadate = True
+    self.uuid = 2
+    self.src = 'visits'
+    self.callback = mrsman.addMbEvents
     if(self.num):
         mrsman.numThreads = 1
         self.filter = {'hadm_id':self.num}
