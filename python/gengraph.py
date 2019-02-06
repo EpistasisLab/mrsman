@@ -2,13 +2,50 @@
 from os import walk
 import json
 import py2neo
+import queue
+import threading
+import time
+import os
+import sys
 graph = py2neo.Graph(host="localhost", auth=("neo4j", "password")) 
 
+exitFlag = 0
 
-#classnames = ["Patient","Practitioner","Encountertype","visittype","Location","Encounter","DiagnosticReport","Observation"]
+class myThread (threading.Thread):
+   def __init__(self, threadID, name, q):
+      threading.Thread.__init__(self)
+      self.threadID = threadID
+      self.name = name
+      self.q = q
+   def run(self):
+      print ("Starting " + self.name)
+      process_data(self.name, self.q)
+      print ("Exiting " + self.name)
+
+def process_data(threadName, q):
+   while not exitFlag:
+      queueLock.acquire()
+      if not workQueue.empty():
+         data = q.get()
+         classname = data[0]
+         uuid = data[1]
+         queueLock.release()
+         importNode(classname,uuid)
+      else:
+         queueLock.release()
+         #time.sleep(1)
+
+
+
+
+
+
+
+
+
 classnames = ["Encounter"]
 
-def importNode(uuid,classname):
+def importNode(classname,uuid):
     mypath='../data/json/'+classname
     filename = '../data/json/'+classname+'/'+uuid+'.json'
     cypherarray={
@@ -20,47 +57,55 @@ def importNode(uuid,classname):
         "Encounter":"with {json} as value with {uuid:value.id, patient:value.subject.id, location:split(value.location[0].location.reference,'/')[1],start:value.period.start,end:value.period.end,partOf:split(value.partOf.reference,'/')[1]} as enc merge (e:Encounter {uuid:enc.uuid}) on create set e.patient = enc.patient set e.start = enc.start, e.end = enc.end, e.location = enc.location, e.partOf = enc.partOf"
     }
     query = cypherarray[classname] 
-    print(query)
     with open(filename) as data_file:
         j = json.load(data_file)
         j['id'] = uuid
         #print(query)
         graph.run(query, json = j)
 
+
+
+
+threadList=["Thread_"+str(x) for x in range(50)]
+
+queueLock = threading.Lock()
+workQueue = queue.Queue()
+threads = []
+threadID = 1
+
+# Create new threads
+for tName in threadList:
+   thread = myThread(threadID, tName, workQueue)
+   thread.start()
+   threads.append(thread)
+   threadID += 1
+
+# Fill the queue
+queueLock.acquire()
+
+
+
 for classname in classnames:
     print(classname)
     mypath='../data/json/'+classname
-    f = []
-    for (dirpath, dirnames, filenames) in walk(mypath):
-        f.extend(filenames)
-        break
-    for filename in f:
-        ext = filename.split(".")[1]
-        base = filename.split(".")[0]
-        if(ext == 'json'):
-            importNode(base,classname)
+    # This would print all the files and directories
+    filelist = os.listdir( mypath )
+    for filename in filelist:
+        splitted = ext = filename.split(".")
+        if(len(splitted) > 1 and splitted[1] == 'json'):
+            base = splitted[0]
+            workQueue.put([classname,base])
 
+queueLock.release()
 
+# Wait for queue to empty
+while not workQueue.empty():
+   pass
 
-#mypath='../data/json/Patient'
-#f = []
-#for (dirpath, dirnames, filenames) in walk(mypath):
-#    f.extend(filenames)
-#    break
-#for filename in f:
-#    ext = filename.split(".")[1]
-#    base = filename.split(".")[0]
-#    if(ext == 'json'):
-#        importPatient(base)
+# Notify threads it's time to exit
+exitFlag = 1
 
-#mypath='../data/json/Practitioner'
-#f = []
-#for (dirpath, dirnames, filenames) in walk(mypath):
-#    f.extend(filenames)
-#    break
-#for filename in f:
-#    ext = filename.split(".")[1]
-#    base = filename.split(".")[0]
-#    if(ext == 'json'):
-#        importPractitioner(base)
-
+# Wait for all threads to complete
+for t in threads:
+   t.join()
+print ("Exiting Main Thread")
