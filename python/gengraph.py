@@ -35,14 +35,6 @@ def process_data(threadName, q):
          queueLock.release()
          #time.sleep(1)
 
-
-
-
-
-
-
-
-
 classnames = ["Encounter"]
 
 def importNode(classname,uuid):
@@ -63,9 +55,6 @@ def importNode(classname,uuid):
         #print(query)
         graph.run(query, json = j)
 
-
-
-
 threadList=["Thread_"+str(x) for x in range(50)]
 
 queueLock = threading.Lock()
@@ -82,8 +71,6 @@ for tName in threadList:
 
 # Fill the queue
 queueLock.acquire()
-
-
 
 for classname in classnames:
     print(classname)
