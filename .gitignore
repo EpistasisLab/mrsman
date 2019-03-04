@@ -13,6 +13,7 @@ dumps/
 .project
 .classpath
 .ipynb_checkpoints/
+kate.json
 neo.json
 config.json
 __pycache__/
