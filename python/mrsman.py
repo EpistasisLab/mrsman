@@ -550,9 +550,10 @@ def getEvents(self, admission):
     child = copy.copy(self)
     child.uuid = -1
     child.limit = False
+    print(admission.hadm_id)
     child.filter =  {'hadm_id': admission.hadm_id}
     tables = [
-        'chartevents',
+        'chartevents','diagnoses_icd',
         'labevents','inputevents_cv', 'inputevents_mv',
         'noteevents','outputevents',
         'procedureevents_mv','procedures_icd']
@@ -626,7 +627,8 @@ def getConcepts(self):
     concepts['diagnosis'] = {}
     concepts['answer'] = {}
     concepts['category'] = {}
-    concepts['icd9_codes'] = {}
+    concepts['icd9_diagnosis'] = {}
+    concepts['icd9_procedure'] = {}
     concepts['ANTIBACTERIUM'] = {}
     concepts['SPECIMEN'] = {}
     concepts['ORGANISM'] = {}
@@ -637,7 +639,7 @@ def getConcepts(self):
         elif concept.concept_type in ['diagnosis','answer','category']:
             concepts[concept.concept_type][concept.shortname] = concept.uuid
         elif concept.concept_type in ['icd_diagnosis','icd_procedure']:
-            concepts['icd9_codes'][concept.icd9_code] = concept.uuid
+            concepts[concept.concept_type][concept.icd9_code] = concept.uuid
       except Exception as e:
         print(e) 
     return concepts
@@ -774,7 +776,7 @@ def addEvents(self, admission):
     child_1.deltadate = False
     child_1.uuid = 0;
     child_1.src = 'process_queue';
-    child_1.filter =  {'row_id': admission.row_id, 'src': 'visits'}
+    child_1.filter =  {'row_id': admission.row_id, "process_type": "addEvents", 'src': 'visits'}
     cur_1 = getSrc(child_1)
     rows = cur_1.fetchall()
     if len(rows) > 0:
@@ -1176,6 +1178,11 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
         value_type = 'text'
         concept_uuid =uuid_array['concepts']['category'][obs.category]
         value = obs.text
+    elif(obs_type == 'diagnoses_icd'):
+        value_type = 'numeric'
+        concept_uuid = uuid_array['concepts']['icd9_codes'][obs.icd9_code]
+        value = obs.seq_num,
+        date = admission.admittime
     try:
         if not pd.isna(obs.charttime):
             date = obs.charttime

@@ -126,6 +126,7 @@ update concepts set min_val = lenum.min_val, max_val = lenum.max_val, avg_val = 
 
 --add icd_diagnoses dictionary
 insert into concepts (icd9_code,shortname,longname,description,concept_type) select icd9_code,short_title,concat(short_title,' [icd_diagnosis_',icd9_code,']'),long_title,'icd_diagnosis' from mimiciii.d_icd_diagnoses;
+insert into concepts (icd9_code,shortname,longname,description,concept_type) select foo.icd9_code,foo.icd9_code,concat('[icd_diagnosis_',foo.icd9_code,']'),foo.icd9_code,'icd_diagnosis' from (select icd9_code,count(*) num from mimiciii.diagnoses_icd group by icd9_code order by num desc) foo left join mimiciii.d_icd_diagnoses on foo.icd9_code = mimiciii.d_icd_diagnoses.icd9_code where row_id is null and foo.icd9_code != '' order by foo.icd9_code;
 
 --add icd_procedures dictionary
 insert into concepts (icd9_code,shortname,longname,description,concept_type) select icd9_code,short_title,concat(short_title,' [icd_procedure_',icd9_code,']'),long_title,'icd_procedure' from mimiciii.d_icd_procedures;
@@ -133,7 +134,7 @@ insert into concepts (icd9_code,shortname,longname,description,concept_type) sel
 -- set class and datatype for concepts
 update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';
 update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'diagnosis';
-update concepts set concept_class_id = 4,  concept_datatype_id = 4 where concept_type  = 'icd_diagnosis';
+update concepts set concept_class_id = 1,  concept_datatype_id = 1 where concept_type  = 'icd_diagnosis';
 update concepts set concept_class_id = 2,  concept_datatype_id = 4 where concept_type  = 'icd_procedure';
 update concepts set concept_class_id = 7, concept_datatype_id = 3 where concept_type  = 'category';
 update concepts set concept_class_id = 1, concept_datatype_id = 1 where concept_type  = 'test_num';
@@ -182,3 +183,12 @@ delete from concepts where concept_type = 'icd_diagnosis' and num_records = 0;
 delete from concepts where concept_type = 'test_enum' and itemid not in (select itemid from cetxt_map);
 -- delete from concepts where concept_type = 'test_enum';
 create view visits as select a.*,visittype_uuids.uuid visit_type_uuid,discharge_location_uuids.uuid discharge_location_uuid,admission_location_uuids.uuid admission_location_uuid,patient_uuid,visittypes.row_id visit_type_code from mimiciii.admissions a left join (select uuid patient_uuid,patients.* from mimiciii.patients left join uuids on mimiciii.patients.row_id = uuids.row_id where uuids.src = 'patients') p  on a.subject_id = p.subject_id left join locations admission_locations on a.admission_location = admission_locations.location left join locations discharge_locations on a.discharge_location = discharge_locations.location left join uuids admission_location_uuids on admission_locations.row_id = admission_location_uuids.row_id  and admission_location_uuids.src = 'locations' left join uuids discharge_location_uuids on discharge_locations.row_id = discharge_location_uuids.row_id  and discharge_location_uuids.src = 'locations' left join visittypes on a.admission_type = visittypes.visittype left join uuids visittype_uuids on visittype_uuids.row_id = visittypes.row_id and visittype_uuids.src = 'visittypes' where patient_uuid is not null order by subject_id;
+-- Generate process queue
+drop table if exists process_queue;
+CREATE TABLE process_queue
+(
+  src character(32),
+  row_id integer,
+  process_type character varying(50),
+  state smallint default 0
+);
