@@ -443,6 +443,19 @@ def insertPgDict(self,table, Dict):
         print(e)
         exit()
 
+#run sql from file in openmrs database
+def loadMySQLFile(self,filename):
+    mysql_cur = self.mysql_conn.cursor()
+    try:
+        for line in open(filename, "r"):
+            mysql_cur.execute(line)
+        self.mysql_conn.commit()
+        return mysql_cur
+    except Exception as e:
+        print("can't load file")
+        print(e)
+        exit()
+
 #run sql from file in mimic database
 def loadPgsqlFile(self,filename):
     pg_cur = openPgCursor(self)

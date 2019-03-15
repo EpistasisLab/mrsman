@@ -41,6 +41,7 @@ class base ():
     mrsman.bootstrap(self)
     print("initialize database")
     mrsman.loadPgsqlFile(self,'../mimic/sql/add_tables.sql')
+    mrsman.loadMySQLFile(self,'./mimic/sql/add_tables_mysql.sql')
     print("import concepts")
     mrsman.conceptsToConcepts(self)
     print("link mapped concepts")
