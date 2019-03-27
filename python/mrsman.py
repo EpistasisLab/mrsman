@@ -640,8 +640,8 @@ def getConcepts(self):
     concepts['diagnosis'] = {}
     concepts['answer'] = {}
     concepts['category'] = {}
-    concepts['icd9_diagnosis'] = {}
-    concepts['icd9_procedure'] = {}
+    concepts['diagnoses_icd'] = {}
+    concepts['procedure_icd'] = {}
     concepts['ANTIBACTERIUM'] = {}
     concepts['SPECIMEN'] = {}
     concepts['ORGANISM'] = {}
@@ -651,7 +651,7 @@ def getConcepts(self):
             concepts[concept.concept_type][concept.itemid] = concept.uuid
         elif concept.concept_type in ['diagnosis','answer','category']:
             concepts[concept.concept_type][concept.shortname] = concept.uuid
-        elif concept.concept_type in ['icd_diagnosis','icd_procedure']:
+        elif concept.concept_type in ['diagnoses_icd','procedure_icd']:
             concepts[concept.concept_type][concept.icd9_code] = concept.uuid
       except Exception as e:
         print(e) 
@@ -1193,9 +1193,10 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
         value = obs.text
     elif(obs_type == 'diagnoses_icd'):
         value_type = 'numeric'
-        concept_uuid = uuid_array['concepts']['icd9_codes'][obs.icd9_code]
-        value = obs.seq_num,
-        date = admission.admittime
+        if(obs.icd9_code):
+          concept_uuid = uuid_array['concepts']['diagnoses_icd'][obs.icd9_code]
+          value = obs.seq_num,
+          date = admission.admittime
     try:
         if not pd.isna(obs.charttime):
             date = obs.charttime
