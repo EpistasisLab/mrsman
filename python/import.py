@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import mrsman
+import graphdb
 import copy
 class base ():
   def __init__(self):
@@ -40,7 +41,6 @@ class base ():
     print("bootstrap")
     mrsman.bootstrap(self)
     print("initialize database")
-    print(self)
     mrsman.loadPgsqlFile(self,'./mimic/sql/add_tables.sql')
     mrsman.loadMySQLFile(self,'./mimic/sql/add_tables_mysql.sql')
     print("import concepts")
@@ -158,5 +158,11 @@ class base ():
     subject_id = self.num
     mrsman.deletePatient(self,subject_id)
     mrsman.shutdown(self)
+
+  def initGraph(self):
+    graphdb.loadGraph(self)
+
+
+
 
 base()

@@ -50,6 +50,8 @@ import.py requires python 3.x.  It configures OpenMRS for use with the MIMIC-III
 
 5. Log into OpenMRS (important: Do not log into OpenMRS until *after* initDb finishes)
 Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true"
+Navigate to Maitenance->Manage Encounter Roles.  Add an encounter role for diagnostic reports.  Save the generated uuid to Advanced Settings->fhir.encounter.encounterRoleUuid
+Navigate to Maitenance->Manage Encounter Types.  Add an encounter type for microbiology events.  Save the generated uuid to Advanced Settings->fhir.encounter.encounterType.MB
 
 6. Import records
 ```bash
@@ -57,6 +59,8 @@ Navigate to Maitenance->Advanced Settings, and set "validation.disable" to "true
 ./python/import.py initCaregivers
 ./python/import.py initPatients
 ./python/import.py initAdmit
+./python/import.py genMbEvents
+
 ./python/import.py genEvents
 ```
 

@@ -1150,6 +1150,7 @@ def addFhirObs(self,obs_type,obs,admission,encounter_uuid):
         return(None)
 #create a fhir observation for a mimic event
 def addObs(self,obs_type,obs,admission,encounter_uuid):
+    caregiver_uuid = False
     value = False
     units = False
     date = False
@@ -1206,6 +1207,13 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
             date = obs.starttime
     except Exception:
         pass
+    try:
+        caregiver_uuid = uuid_array['caregivers'][obs.cgid]
+    except Exception:
+        pass
+
+
+
     if not date:
         try:
             if not pd.isna(obs.chartdate):
@@ -1219,6 +1227,7 @@ def addObs(self,obs_type,obs,admission,encounter_uuid):
                 'concept_uuid': concept_uuid,
                 'patient_uuid': admission.patient_uuid,
                 'encounter_uuid': encounter_uuid,
+                'caregiver_uuid': caregiver_uuid,
                 'src': obs_type,
                 'row_id': obs.row_id,
         }
