@@ -23,11 +23,10 @@ var getConcepts = function() {
     var deferred = Q.defer();
     session = neo.session();
     session
-        .run('MATCH (p:Patient) WHERE p.uuid = "4ffc965e-3fa6-4bc8-8f67-139862b21b96" with p MATCH (o)-[:of]-(p) return distinct(o.concept_uuid)', {})
+        .run('MATCH (o) return distinct(o.concept_uuid) limit 100', {})
         .then(function(result) {
             var concepts = [];
             result.records.forEach(function(record) {
-                //console.log(record.get('(o.concept)'));
                 concepts.push(record.get('(o.concept_uuid)'))
             });
             deferred.resolve(concepts);
