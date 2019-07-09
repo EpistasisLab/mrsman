@@ -150,7 +150,12 @@ BaseModel.prototype.get_rest = function() {
     var promise = rp(options)
     promise.then(function(data) {
         deferred.resolve(JSON.parse(data.body));
+    })
+    .catch(function(err, rr) {
+            console.log('err')
+            deferred.resolve(false);
     });
+
     return deferred.promise;
 }
 

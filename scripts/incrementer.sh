@@ -1,4 +1,4 @@
-num_records=378585162;
+num_records=379236162;
 chunksize=10000000
 iterations=$(($num_records/$chunksize))
 iterations=$(($iterations + 1))
