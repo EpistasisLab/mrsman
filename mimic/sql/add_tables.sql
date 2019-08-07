@@ -69,6 +69,7 @@ CREATE TABLE concepts
   longname character varying(255),
   description character varying(255),
   icd9_code character varying(10),
+  loinc_code character varying(10),
   linksto character varying(50),
   concept_type character varying(50),
   concept_class_id integer,
@@ -85,7 +86,7 @@ CREATE UNIQUE INDEX conceptname_idx ON concepts (longname);
 insert into concepts (itemid,shortname,longname,concept_type,linksto) select itemid,label,concat(label,' [',concept_type,'_',itemid,']'),concat('test_',concept_type),linksto from (select itemid,label,unnest('{text,enum,num,set}'::text[]) concept_type,linksto,dbsource from mimiciii.d_items) c;
 
 -- Generate concepts from d_labitems table
-insert into concepts (itemid,shortname,longname,concept_type,linksto) select itemid,label,concat(label,' [',concept_type,'_',itemid,']'),concat('test_',concept_type),'labevents' linksto from (select itemid,label,unnest('{text,num,set}'::text[]) concept_type from mimiciii.d_labitems) c;
+insert into concepts (itemid,shortname,longname,loinc_code,concept_type,linksto) select itemid,label,concat(label,' [',concept_type,'_',itemid,']'),loinc_code,concat('test_',concept_type),'labevents' linksto from (select itemid,label,loinc_code,unnest('{text,num,set}'::text[]) concept_type from mimiciii.d_labitems) c;
 
 -- map distinct values for each chartevents item where avg occurance > 1000 
 drop table if exists cetxt_map;
@@ -129,7 +130,7 @@ insert into concepts (icd9_code,shortname,longname,description,concept_type) sel
 insert into concepts (icd9_code,shortname,longname,description,concept_type) select foo.icd9_code,foo.icd9_code,concat('[diagnoses_icd_',foo.icd9_code,']'),foo.icd9_code,'diagnoses_icd' from (select icd9_code,count(*) num from mimiciii.diagnoses_icd group by icd9_code order by num desc) foo left join mimiciii.d_icd_diagnoses on foo.icd9_code = mimiciii.d_icd_diagnoses.icd9_code where row_id is null and foo.icd9_code != '' order by foo.icd9_code;
 
 --add procedure_icds dictionary
-insert into concepts (icd9_code,shortname,longname,description,concept_type) select icd9_code,short_title,concat(short_title,' [procedure_icd_',icd9_code,']'),long_title,'procedure_icd' from mimiciii.d_procedure_icds;
+insert into concepts (icd9_code,shortname,longname,description,concept_type) select icd9_code,short_title,concat(short_title,' [procedure_icd_',icd9_code,']'),long_title,'procedure_icd' from mimiciii.d_icd_procedures;
 
 -- set class and datatype for concepts
 update concepts set concept_class_id = 5, concept_datatype_id = 4 where concept_type  = 'answer';

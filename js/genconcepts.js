@@ -23,7 +23,7 @@ var getConcepts = function() {
     var deferred = Q.defer();
     session = neo.session();
     session
-        .run('MATCH (o) return distinct(o.concept_uuid) limit 100', {})
+        .run('MATCH (o) return distinct(o.concept_uuid)', {})
         .then(function(result) {
             var concepts = [];
             result.records.forEach(function(record) {
@@ -38,35 +38,6 @@ var getConcepts = function() {
     return deferred.promise;
 }
 
-var getConceptz = function() {
-    var deferred = Q.defer();
-    var return_list = []
-    var method = 'GET';
-    var uri = config.url + '/rest/v1/concept';
-    var options = {
-        method: method,
-        uri: uri,
-        resolveWithFullResponse: true,
-        headers: {
-            "Authorization": config.auth
-        }
-    };
-
-
-    rp(options)
-        .then(function(data) {
-            var obj = JSON.parse(data.body);
-            for (var i in obj.results) {
-                var record = obj.results[i];
-                return_list.push(record);
-            }
-            deferred.resolve(return_list);
-
-        });
-    return deferred.promise;
-}
-
-
 
 //function to generate patient object from raw data
 var processConcepts = function(concepts, i) {
@@ -80,11 +51,6 @@ var processConcepts = function(concepts, i) {
             var nd = Q.defer();
             var cr = concept.get_rest();
             cr.then(function(d) {
-            //console.log(d);
-//            nd.resolve(processConcepts(concepts, i + 1));
-        if (!debug) {
-//var json = d;
-//console.log(d);
             var json = JSON.stringify(d);
             var filename = path.resolve(config.dirs.Concept) + '/' + concept.id + '.json';
             fs.writeFile(filename, json, 'utf8', function(result) {
@@ -105,19 +71,27 @@ var processConcepts = function(concepts, i) {
                         }
                     })
                     .catch(function(error) {
+                        session.close();
+                        nd.resolve(processConcepts(concepts, i + 1));
+                        if (i == concepts.length) {
+                            neo.close();
+                        }
                         console.log(error);
                     });
             });
             nd.promise.then(function(foo) {
                 console.log(foo);
             })
-        } else {
-      //      console.log(JSON.stringify(concept));
-                        nd.resolve(processConcepts(concepts, i + 1));
-        }
 
 
 
+            })
+            .catch(function(error) {
+                 nd.resolve(processConcepts(concepts, i + 1));
+                 if (i == concepts.length) {
+                    neo.close();
+                 }
+                 console.log(error);
             });
 
 
