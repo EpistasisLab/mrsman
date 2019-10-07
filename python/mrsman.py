@@ -30,7 +30,7 @@ debug = False
 numThreads = 1
 saveFiles = True
 exitFlag = False
-shiftDates = True
+shiftDates = False
 config_file = 'config.json'
 create_omrs_obs = False
 
