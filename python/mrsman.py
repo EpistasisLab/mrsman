@@ -172,16 +172,19 @@ def getSrc(self):
         print(e)
         exit()
 
-# fetch and post records, saving the uuid if it doesn't already exist
+#use records in a cursor in callback, saving the uuid if it doesn't already exist
 def handleRecords(self):
     cur = getSrc(self)
+    print(self.filter)
     success = 0
     child = copy.copy(self)
     child.x = False
     for record in cur:
+        #execute the callback
         uuid=self.callback(child,record)
         if (uuid):
            print("added "+self.src+": " + uuid)
+           self.last_uuid = uuid;
            if(self.uuid == -1):
                uuid_cur = insertPgDict(self,'uuids', {
                    'src': self.src,
@@ -225,7 +228,8 @@ def openPgCursor(self):
 def bootstrap(self):
     global config
     global smart
-    parent_dir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
+    #parent_dir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
+    parent_dir = '/data/devel/mrsman'
     with open(parent_dir + '/' + config_file) as f:
         data = json.load(f)
         config = data['global']
@@ -233,7 +237,7 @@ def bootstrap(self):
     #connect to openmrs psql
     try:
         self.pg_conn = psycopg2.connect(
-            dbname='mimic', user=config['PGSQL_USER'], password=config['PGSQL_PASS'])
+            dbname='mimic', user=config['PGSQL_USER'], password=config['PGSQL_PASS'], host='localhost')
     except Exception as e:
         print("unable to connect to the postgres databases")
         print(e)
@@ -843,6 +847,79 @@ def printAdmission(self,admission):
         admission_data = getAdmissionData(child, admission)
         print(admission_data)
 
+# post simple admissions to openmrs fhir encounters interface
+def addSimpleAdmission(self,record):
+        stay_array={}
+        print("processing admission: " + str(record.hadm_id))
+        child = copy.copy(self) 
+        admission_data = getAdmissionData(child, record)
+        admit_date = deltaDate(record.admittime, record.offset)
+        disch_date = deltaDate(record.dischtime, record.offset)
+        # generate grandparent (visit encounter)
+        visit = {
+            "resourceType":
+            "Encounter",
+            "status":
+            "finished",
+            "type": [{
+                "coding": [{
+                    "code": str(record.visit_type_code)
+                }]
+            }],
+            "subject": {
+               #"reference": "Patient/" + record.patient_uuid
+                "id": record.patient_uuid
+            },
+            "period": {
+                "start": admit_date,
+                "end": disch_date
+            },
+            "location": [{
+                "location": {
+                    "reference": "Location/" + record.admission_location_uuid,
+                },
+                "period": {
+                    "start": admit_date,
+                    "end": disch_date
+                }
+            }]
+        }
+        visit_uuid = postDict('fhir', 'Encounter', visit)
+        # generate parent (admission encounter)
+        admission = {
+            "resourceType":
+            "Encounter",
+            "status":
+            "finished",
+            "type": [{
+                "coding": [{
+                    "display": "Vitals"
+                }]
+            }],
+            "subject": {
+                #"reference": "Patient/" + record.patient_uuid
+                "id": record.patient_uuid
+            },
+            "period": {
+                "start": admit_date,
+                "end": disch_date
+            },
+            "location": [{
+                "location": {
+                    "reference": "Location/" + record.admission_location_uuid,
+                },
+                "period": {
+                    "start": admit_date,
+                    "end": disch_date
+                }
+            }],
+            "partOf": {
+                "reference": "Encounter/" + visit_uuid,
+            }
+        }
+        admission_uuid = postDict('fhir', 'Encounter', admission)
+        return(admission_uuid)
+
 # post admissions to openmrs fhir encounters interface
 def addAdmission(self,record):
         stay_array={}
@@ -1047,6 +1124,33 @@ def addAdmission(self,record):
             transuuid = postDict('fhir', 'Encounter', transenc)
         return(visit_uuid)
 
+#create a fhir observation for a mimic event
+def genFhirBenchmarkObs(self,patient_uuid,concept_uuid,encounter_uuid,date,value,units,value_type):
+    observation = {
+        "resourceType": "Observation",
+        "code": {
+            "coding": [{
+                "system": "http://openmrs.org",
+                "code": concept_uuid
+             }]
+        },
+        "subject": {
+            'reference': 'Patient/' + patient_uuid
+        },
+        "context": {
+            "reference": "Encounter/" + encounter_uuid,
+        }
+    }
+    observation["effectiveDateTime"] =  date
+    if(value_type == 'numeric'):
+        observation["valueQuantity"] =  {
+           "value": str(value),
+           "unit": units ,
+           "system": "http://unitsofmeasure.org",
+        }
+    elif(value_type == 'text'):
+        observation["valueString"] = value
+    return(observation)
 #create a fhir observation for a mimic event
 def addFhirObs(self,obs_type,obs,admission,encounter_uuid):
     value = False
