@@ -40,31 +40,54 @@ MATCH (e:Encounter) where e.partOf is not null with e MATCH (pe:Encounter {uuid:
 
 
 
-MATCH (o:labevents)
-with o 
-MATCH (e:Encounter {uuid:o.encounter_uuid}) 
-WHERE NOT o:Processed
-WITH o,e
-LIMIT 100000
-MERGE (o)-[:at]->(e)
-SET o:Processed
-RETURN COUNT(*) AS processed
+MATCH (o:labevents) with o MATCH (c:Concept {uuid:o.concept_uuid}) WHERE NOT o:conceptualized WITH o,c LIMIT 1000000 MERGE (o)-[:is]->(c) SET o:conceptualized RETURN COUNT(*) AS conceptualized
 
 
-MATCH (company:Company)
-WITH company
-MATCH (p:Person {comp_number: company.companyNumber} )
-WHERE NOT p:Processed
-WITH company, p
-LIMIT 50000
-MERGE (p) - [:WORKS_AT] -> (company)
-SET p:Processed
-RETURN COUNT(*) AS processed
+
+2f80a41c-c806-4920-9feb-911b75fc0be
+
+
+
+
+CALL apoc.periodic.iterate(
+"MATCH (c:Concept) with c match (o:labevents {concept_uuid:c.uuid}) return c,o",
+"create (o)-[:issa]->(c) RETURN c,o",
+ {batchSize:20, iterateList:true, parallel:true});
+
+CALL apoc.periodic.iterate(
+"MATCH (p:Patient) with p match (o {patient_uuid:p.uuid}) return p,o",
+"create (o)-[:patient]->(p) RETURN p,o",
+ {iterateList:true, parallel:true});
+
+CALL apoc.periodic.iterate(
+"MATCH (e:Encounter) with e match (o {encounter_uuid:e.uuid}) return e,o",
+"create (o)-[:encounter]->(e) RETURN e,o",
+{iterateList:true, parallel:true});
+
+
+
+CALL apoc.periodic.iterate(
+"MATCH (c:Concept) with c match (o:noteevents {concept_uuid:c.uuid}) return c,o",
+"create (o)-[:issa]->(c) RETURN c,o",
+ {batchSize:20, iterateList:true, parallel:true});
+
+
+
+CALL apoc.periodic.iterate(
+"MATCH (c:Concept) with c match (o:labevents {concept_uuid:c.uuid}) return c,o",
+"create (o)-[:issa]->(c) RETURN c,o",
+ {batchSize:20, iterateList:true, parallel:true});
+
+
+
+
+
+MATCH (o:noteevents) with o MATCH (c:Concept {uuid:o.concept_uuid}) create (o)-[:isa]->(c);
+MATCH (o:labevents) with o MATCH (c:Concept {uuid:o.concept_uuid}) create (o)-[:isa]->(c);
 
 
 
 MATCH (o:labevents) o MATCH (p:Patient {uuid:o.patient_uuid}) create (o)-[:of]->(p);
-o
 
 MATCH (o:noteevents) with o MATCH (c:Practitioner {uuid:o.caregiver_uuid}) create (c)-[:created]->(o);
 MATCH (o:labevents) with o MATCH (c:Practitioner {uuid:o.caregiver_uuid}) create (c)-[:created]->(o);
