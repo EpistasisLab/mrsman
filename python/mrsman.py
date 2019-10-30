@@ -30,7 +30,7 @@ debug = False
 numThreads = 1
 saveFiles = True
 exitFlag = False
-shiftDates = False
+shiftDates = True
 config_file = 'config.json'
 create_omrs_obs = False
 
@@ -175,7 +175,6 @@ def getSrc(self):
 #use records in a cursor in callback, saving the uuid if it doesn't already exist
 def handleRecords(self):
     cur = getSrc(self)
-    print(self.filter)
     success = 0
     child = copy.copy(self)
     child.x = False
@@ -258,6 +257,7 @@ def bootstrap(self):
     smart.server.session.auth=HTTPBasicAuth(config['OPENMRS_USER'],config['OPENMRS_PASS'])
     return()
 
+
 # load uuids into memory
 def getUuids(self):
     global uuid_array
@@ -277,6 +277,21 @@ def getUuids(self):
         child.index_on = index_fields[table_name]
         uuid_array[table_name] = genIndex(child)
     uuid_array['concepts'] = getConcepts(self)
+
+
+# load uuids into memory
+def getSubjectVisits(self):
+    global subjects
+    mrsman.getUuids(self)
+    self.src = 'visits'
+    self.callback = mrsman.addEvents
+    if(self.num):
+        mrsman.numThreads = 1
+        self.filter = {'hadm_id':self.num}
+    else:
+        mrsman.numThreads = 50
+    self.num = False
+    mrsman.runTask(self)
 
 
 # close db connections
@@ -486,7 +501,7 @@ def postDict(endpoint, table, Dict):
         print('post:')
         print(Dict)
         print('response:')
-        print(r)
+        print(r.headers)
     if ("Location" in r.headers):
         uuid = r.headers['Location'].split('/').pop()
         if(saveFiles):
@@ -847,6 +862,25 @@ def printAdmission(self,admission):
         admission_data = getAdmissionData(child, admission)
         print(admission_data)
 
+
+def addVisitObservations(self, visit):
+    encounter_uuid = uuid_array['admissions'][visit.hadm_id]
+    patient_uuid = visit.patient_uuid
+    self.fhir_array.append('Patient/'+ patient_uuid)
+    self.fhir_array.append('Encounter/'+encounter_uuid)
+    for step in self.observations:
+        obs = genFhirBenchmarkObs(self,encounter_uuid,patient_uuid,step)
+        print(obs)
+        observation_uuid = postDict('fhir', 'Observation', obs)
+        if(observation_uuid):
+            self.fhir_array.append('Observation/'+ observation_uuid)
+#        print(observation_uuid)
+
+
+
+
+
+
 # post simple admissions to openmrs fhir encounters interface
 def addSimpleAdmission(self,record):
         stay_array={}
@@ -863,13 +897,14 @@ def addSimpleAdmission(self,record):
             "finished",
             "type": [{
                 "coding": [{
-                    "code": str(record.visit_type_code)
+                    "code": str(record.visit_type_code),
+                    "userSelected": True
                 }]
             }],
             "subject": {
-               #"reference": "Patient/" + record.patient_uuid
-                "id": record.patient_uuid
-            },
+                "id": record.patient_uuid,
+                "reference": "Patient/" +  record.patient_uuid,
+             },
             "period": {
                 "start": admit_date,
                 "end": disch_date
@@ -936,7 +971,8 @@ def addAdmission(self,record):
             "finished",
             "type": [{
                 "coding": [{
-                    "code": str(record.visit_type_code)
+                    "code": str(record.visit_type_code),
+                    "userSelected": True
                 }]
             }],
             "subject": {
@@ -1125,32 +1161,37 @@ def addAdmission(self,record):
         return(visit_uuid)
 
 #create a fhir observation for a mimic event
-def genFhirBenchmarkObs(self,patient_uuid,concept_uuid,encounter_uuid,date,value,units,value_type):
+def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid,step):
     observation = {
         "resourceType": "Observation",
         "code": {
             "coding": [{
                 "system": "http://openmrs.org",
-                "code": concept_uuid
+                "code": step['concept_uuid']
              }]
         },
         "subject": {
-            'reference': 'Patient/' + patient_uuid
+            'id':  patient_uuid,
+            'reference': 'Patient/' + patient_uuid,
+            'identifier': {
+                'id':  patient_uuid,
+             }
         },
         "context": {
             "reference": "Encounter/" + encounter_uuid,
         }
     }
-    observation["effectiveDateTime"] =  date
-    if(value_type == 'numeric'):
+    observation["effectiveDateTime"] =  step['date']
+    if(step['value_type'] == 'numeric'):
         observation["valueQuantity"] =  {
-           "value": str(value),
-           "unit": units ,
+           "value": str(step['value']),
+           "unit": step['units'],
            "system": "http://unitsofmeasure.org",
         }
-    elif(value_type == 'text'):
-        observation["valueString"] = value
+    elif(step['value_type'] == 'text'):
+        observation["valueString"] = step['value']
     return(observation)
+
 #create a fhir observation for a mimic event
 def addFhirObs(self,obs_type,obs,admission,encounter_uuid):
     value = False
