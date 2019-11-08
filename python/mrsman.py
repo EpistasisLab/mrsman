@@ -868,13 +868,14 @@ def addVisitObservations(self, visit):
     patient_uuid = visit.patient_uuid
     self.fhir_array.append('Patient/'+ patient_uuid)
     self.fhir_array.append('Encounter/'+encounter_uuid)
-    for step in self.observations:
-        obs = genFhirBenchmarkObs(self,encounter_uuid,patient_uuid,step)
-        print(obs)
-        observation_uuid = postDict('fhir', 'Observation', obs)
-        if(observation_uuid):
-            self.fhir_array.append('Observation/'+ observation_uuid)
-#        print(observation_uuid)
+    report = genFhirBenchmarkObs(self,encounter_uuid,patient_uuid)
+    report_uuid = str(uuid.uuid4())
+    save_json('DiagnosticReport',report_uuid,report)
+    postDict('fhir', 'DiagnosticReport', report)
+    #print(obs)
+    #observation_uuid = postDict('fhir', 'Observation', obs)
+    #if(observation_uuid):
+    #    self.fhir_array.append('Observation/'+ observation_uuid)
 
 
 
@@ -1160,37 +1161,6 @@ def addAdmission(self,record):
             transuuid = postDict('fhir', 'Encounter', transenc)
         return(visit_uuid)
 
-#create a fhir observation for a mimic event
-def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid,step):
-    observation = {
-        "resourceType": "Observation",
-        "code": {
-            "coding": [{
-                "system": "http://openmrs.org",
-                "code": step['concept_uuid']
-             }]
-        },
-        "subject": {
-            'id':  patient_uuid,
-            'reference': 'Patient/' + patient_uuid,
-            'identifier': {
-                'id':  patient_uuid,
-             }
-        },
-        "context": {
-            "reference": "Encounter/" + encounter_uuid,
-        }
-    }
-    observation["effectiveDateTime"] =  step['date']
-    if(step['value_type'] == 'numeric'):
-        observation["valueQuantity"] =  {
-           "value": str(step['value']),
-           "unit": step['units'],
-           "system": "http://unitsofmeasure.org",
-        }
-    elif(step['value_type'] == 'text'):
-        observation["valueString"] = step['value']
-    return(observation)
 
 #create a fhir observation for a mimic event
 def addFhirObs(self,obs_type,obs,admission,encounter_uuid):
@@ -1903,3 +1873,278 @@ def mbEvents(df,admission):
         report['contained'].append(g)
         diag_reports.append(report)
     return(diag_reports)
+#post a json encoded record to the fhir/rest interface
+def mbEvents(df,admission):
+    encounter_uuid = uuid_array['visits'][admission.hadm_id]
+    #set charttime to chartdate + 00:00:00 where blank
+    mask = pd.isna(df['charttime'])
+    df['charttime_imp'] = df['charttime']
+    df.loc[mask, 'charttime_imp'] = df['chartdate']
+    #iterate over specimen-charttimes
+    specimens = df.groupby(['spec_itemid', 'charttime_imp','spec_type_desc'], as_index=False).sum()
+    specs = []
+    for index, s in specimens.iterrows():
+         spec_uuid = None
+         try:
+             spec_uuid = uuid_array['concepts']['SPECIMEN'][int(s.spec_itemid)]
+         except Exception as e:
+             print('epec error')
+             print(e)
+         #get original data for this spec
+         df_spec = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid)]
+         org = df_spec.groupby(['org_itemid','org_name'], as_index=False).sum()
+         events = []
+         for i2, o in org.iterrows():
+             df_org = df[(df.charttime_imp == s.charttime_imp) & (df.spec_itemid == s.spec_itemid) & (df.org_itemid == o.org_itemid)]
+             resp = []
+             for i3, a in df_org.iterrows():
+                 antibiotic_uuid = None
+                 try:
+                     antibiotic_uuid = uuid_array['concepts']['ANTIBACTERIUM'][int(a.ab_itemid)]
+                 except Exception:
+                     pass
+                 resp.append({'isolate_num':a.isolate_num,'dilution_comparison':a.dilution_comparison,'dilution_value':a.dilution_value,'dilution_text':a.dilution_text,'ab_name':a.ab_name,'ab_itemid':a.ab_itemid,'antibiotic_uuid':antibiotic_uuid,'interpretation':a.interpretation})
+             organism_uuid = None
+             try:
+                 organism_uuid = uuid_array['concepts']['ORGANISM'][int(o.org_itemid)]
+             except Exception:
+                 pass
+             events.append({'org_itemid':o.org_itemid,'organism_uuid':organism_uuid,'org_name':o.org_name,'resp':resp})
+         charttime = deltaDate(s.charttime_imp, admission.offset)
+         specs.append({'patient_uuid':admission.patient_uuid,'admission_uuid':admission.uuid,'charttime':charttime,'spec_itemid':s.spec_itemid,'spec_type_desc':s.spec_type_desc,'spec_uuid':spec_uuid,'events':events})
+
+    diag_reports = []
+    for record in specs:
+        i=0
+        if len(record['events']) > 0:
+          growth_detected = 'POS'
+        else:
+          growth_detected = 'NEG'
+        interpretation = {
+            "coding": [
+                {
+                    "system": "http://hl7.org/fhir/v2/0078",
+                    "code": growth_detected
+                }
+            ]
+        }
+        report = {
+            'resourceType': 'DiagnosticReport',
+            'status': 'final',
+            'issued': record['charttime'],
+            'effectiveDateTime':  record['charttime'],
+            'category': {
+                'coding': [{
+                    'system': 'http://hl7.org/fhir/v2/0074',
+                    'code': 'MB'
+                 }]
+            },
+            'subject':{
+                'reference': 'Patient/' + record['patient_uuid']
+            },
+            'contained': [],
+            'result': [{
+                'reference': "#g0"
+            }],
+            "context": {
+                "reference": "Encounter/" + encounter_uuid,
+            }
+        }
+        g = {
+            'resourceType': "Observation",
+            'id': 'g0',
+                'issued': record['charttime'],
+                'effectiveDateTime':  record['charttime'],
+                'status': 'final',
+                'code': {
+                    'coding': [{
+                        'system': 'http://openmrs.org',
+                        'code': record['spec_uuid']
+                     }],
+                    'text': record['spec_type_desc']
+                },
+                'subject': {
+                    'reference': 'Patient/' + record['patient_uuid']
+                },
+                'interpretation': interpretation
+        }
+        g_related = []
+        if len(record['events']) > 0:
+            #create a report for each detected organism
+            for event in record['events']:
+                i+=1
+                obs_id = 'org' + str(i);
+                org_obs = {
+                    'resourceType': 'Observation',
+                    'id': obs_id,
+                    'code': {
+                        'coding': [{
+                            'system': 'http://openmrs.org',
+                            "code": event['organism_uuid']
+                         }],
+                        "text": event['org_name']
+                     }
+                }
+                g_related.append({
+                    'type': "has-member",
+                    'target': {
+                        'reference': "#" + obs_id
+                    }
+                })
+                j = 0
+                org_related = []
+                for agent in event['resp']:
+                  if not agent['antibiotic_uuid'] == None:
+                    j+=1
+                    agent_id = 'org' + str(i) + '_agent' + str(j);
+                    dilution_text = agent['dilution_text']
+                    if dilution_text is None:
+                      dilution_text = 'NA'
+                    agent_obs = {
+                        "resourceType": "Observation",
+                        "status": "final",
+                        "id": agent_id,
+                        "code": {
+                            "coding": [{
+                                "system": "http://openmrs.org",
+                                "code": agent['antibiotic_uuid']
+                             }],
+                            "text": agent['ab_name']
+                        },
+                        'subject': {
+                            'reference': "Patient/"+ record['patient_uuid']
+                        },
+                        'valueString': dilution_text,
+                        "interpretation": {
+                            "coding": [{
+                                "system": "http://hl7.org/fhir/v2/0078",
+                                "code": agent['interpretation']
+                        }]}
+                    }
+                    org_related.append({
+                        'type': "has-member",
+                        'target': {
+                            'reference': "#" + agent_id
+                        }
+                    })
+                    report['contained'].append(agent_obs)
+                if len(org_related) > 0:
+                    org_obs['related'] = org_related 
+                report['contained'].append(org_obs)
+        if len(g_related) > 0:
+            g['related'] = g_related 
+        report['contained'].append(g)
+        diag_reports.append(report)
+    return(diag_reports)
+
+
+def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid):
+    date=str((datetime(2000, 1, 1, 0, 0)).isoformat())
+    gzero = str(uuid.uuid4())
+    interpretation = {
+        "coding": [
+           {
+                "system": "http://hl7.org/fhir/v2/0078",
+                "code": 'POS'
+            }
+        ]
+    }
+    report = {
+        'resourceType': 'DiagnosticReport',
+        'status': 'final',
+        'issued': date,
+        'effectiveDateTime':  date,
+        'category': {
+            'coding': [{
+                'system': 'http://hl7.org/fhir/v2/0074',
+                'code': 'ICU'
+             }]
+        },
+        'subject':{
+#            'reference': 'Patient/' + patient_uuid
+            'id':  patient_uuid,
+#            'reference': 'Patient/' + patient_uuid,
+#            'identifier': {
+#                 'id':  patient_uuid,
+#             }
+        },
+        'contained': [],
+        'result': [{
+            'reference': "#" + gzero
+        }],
+        "context": {
+            "reference": "Encounter/" + encounter_uuid,
+        }
+    }
+    g = {
+        'resourceType': "Observation",
+        'id': gzero,
+            'issued': date,
+            'effectiveDateTime':  date,
+            'status': 'final',
+            'code': {
+                'coding': [{
+                    'system': 'http://openmrs.org',
+                    #'code': record['spec_uuid']
+                    'code': 'e7be6971-0dc7-4146-a2a7-eacfc33153de'
+                 }],
+                #'text': record['spec_type_desc']
+                'text': 'BLOOD'
+            },
+            'subject': {
+                #'reference': 'Patient/' + patient_uuid
+                'id':  patient_uuid,
+                'reference': 'Patient/' + patient_uuid,
+                'identifier': {
+                     'id':  patient_uuid,
+                 }
+            },
+            'interpretation': interpretation
+
+
+    }
+    g_related = []
+    i=0
+    for step in self.observations:
+        i+=1
+        obs_id = 'org' + str(i);
+        obs_id = str(uuid.uuid4())
+        observation = {
+            "resourceType": "Observation",
+            "id": obs_id,
+            "code": {
+                "coding": [{
+                    "system": "http://openmrs.org",
+                    "code": step['concept_uuid']
+                 }]
+            },
+            "subject": {
+                'id':  patient_uuid,
+                'reference': 'Patient/' + patient_uuid,
+                'identifier': {
+                     'id':  patient_uuid,
+                 }
+            },
+            "context": {
+                "reference": "Encounter/" + encounter_uuid,
+            }
+        }
+        observation["effectiveDateTime"] =  step['date']
+        if(step['value_type'] == 'numeric'):
+            observation["valueQuantity"] =  {
+               "value": str(step['value']),
+               "unit": step['units'],
+               "system": "http://unitsofmeasure.org",
+            }
+        elif(step['value_type'] == 'text'):
+            observation["valueString"] = step['value']
+        report['contained'].append(observation)
+        g_related.append({
+            'type': "has-member",
+            'target': {
+                'reference': "#" + obs_id
+            }
+       })
+    g['related'] = g_related 
+    report['contained'].append(g)
+    return(report)
