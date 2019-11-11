@@ -864,22 +864,13 @@ def printAdmission(self,admission):
 
 
 def addVisitObservations(self, visit):
-    encounter_uuid = uuid_array['admissions'][visit.hadm_id]
+    encounter_uuid = uuid_array['visits'][visit.hadm_id]
     patient_uuid = visit.patient_uuid
     self.fhir_array.append('Patient/'+ patient_uuid)
     self.fhir_array.append('Encounter/'+encounter_uuid)
     report = genFhirBenchmarkObs(self,encounter_uuid,patient_uuid)
-    report_uuid = str(uuid.uuid4())
-    save_json('DiagnosticReport',report_uuid,report)
-    postDict('fhir', 'DiagnosticReport', report)
-    #print(obs)
-    #observation_uuid = postDict('fhir', 'Observation', obs)
-    #if(observation_uuid):
-    #    self.fhir_array.append('Observation/'+ observation_uuid)
-
-
-
-
+    dr_uuid = postDict('fhir', 'DiagnosticReport', report)
+    self.fhir_array.append('DiagnosticReport/'+ dr_uuid)
 
 
 # post simple admissions to openmrs fhir encounters interface
@@ -2040,15 +2031,6 @@ def mbEvents(df,admission):
 
 def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid):
     date=str((datetime(2000, 1, 1, 0, 0)).isoformat())
-    gzero = str(uuid.uuid4())
-    interpretation = {
-        "coding": [
-           {
-                "system": "http://hl7.org/fhir/v2/0078",
-                "code": 'POS'
-            }
-        ]
-    }
     report = {
         'resourceType': 'DiagnosticReport',
         'status': 'final',
@@ -2061,56 +2043,21 @@ def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid):
              }]
         },
         'subject':{
-#            'reference': 'Patient/' + patient_uuid
             'id':  patient_uuid,
-#            'reference': 'Patient/' + patient_uuid,
-#            'identifier': {
-#                 'id':  patient_uuid,
-#             }
         },
         'contained': [],
-        'result': [{
-            'reference': "#" + gzero
-        }],
+        'result': [],
         "context": {
             "reference": "Encounter/" + encounter_uuid,
         }
     }
-    g = {
-        'resourceType': "Observation",
-        'id': gzero,
-            'issued': date,
-            'effectiveDateTime':  date,
-            'status': 'final',
-            'code': {
-                'coding': [{
-                    'system': 'http://openmrs.org',
-                    #'code': record['spec_uuid']
-                    'code': 'e7be6971-0dc7-4146-a2a7-eacfc33153de'
-                 }],
-                #'text': record['spec_type_desc']
-                'text': 'BLOOD'
-            },
-            'subject': {
-                #'reference': 'Patient/' + patient_uuid
-                'id':  patient_uuid,
-                'reference': 'Patient/' + patient_uuid,
-                'identifier': {
-                     'id':  patient_uuid,
-                 }
-            },
-            'interpretation': interpretation
-
-
-    }
-    g_related = []
     i=0
     for step in self.observations:
-        i+=1
-        obs_id = 'org' + str(i);
-        obs_id = str(uuid.uuid4())
+        i += 1
+        obs_id = str(i)
         observation = {
             "resourceType": "Observation",
+            "effectiveDateTime": step['date'],
             "id": obs_id,
             "code": {
                 "coding": [{
@@ -2129,7 +2076,6 @@ def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid):
                 "reference": "Encounter/" + encounter_uuid,
             }
         }
-        observation["effectiveDateTime"] =  step['date']
         if(step['value_type'] == 'numeric'):
             observation["valueQuantity"] =  {
                "value": str(step['value']),
@@ -2139,12 +2085,7 @@ def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid):
         elif(step['value_type'] == 'text'):
             observation["valueString"] = step['value']
         report['contained'].append(observation)
-        g_related.append({
-            'type': "has-member",
-            'target': {
+        report['result'].append({
                 'reference': "#" + obs_id
-            }
        })
-    g['related'] = g_related 
-    report['contained'].append(g)
     return(report)
