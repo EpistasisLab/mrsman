@@ -152,17 +152,22 @@ class base ():
     self.num = False
     mrsman.runTask(self)
   #
+  #fhir based observations
+  def genBmEvents(self):
+    mrsman.getUuids(self)
+    mrsman.numThreads = 50
+    self.callback = mrsman.addBmEvents
+    mrsman.runTask(self)
+  #
   #fhir delete a patient 
   def deletePatient(self):
     mrsman.getUuids(self)
     subject_id = self.num
     mrsman.deletePatient(self,subject_id)
     mrsman.shutdown(self)
-
+  #
+  #generate neo4j graph
   def initGraph(self):
     graphdb.loadGraph(self)
-
-
-
-
+  #
 base()

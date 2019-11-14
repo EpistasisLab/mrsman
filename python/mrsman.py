@@ -869,7 +869,10 @@ def addVisitObservations(self, visit):
     self.fhir_array.append('Patient/'+ patient_uuid)
     self.fhir_array.append('Encounter/'+encounter_uuid)
     report = genFhirBenchmarkObs(self,encounter_uuid,patient_uuid)
-    dr_uuid = postDict('fhir', 'DiagnosticReport', report)
+    report_uuid = str(uuid.uuid4())
+    print(self)
+    save_json('DiagnosticReport',report_uuid,report)
+    #dr_uuid = postDict('fhir', 'DiagnosticReport', report)
     self.fhir_array.append('DiagnosticReport/'+ dr_uuid)
 
 
@@ -2088,4 +2091,5 @@ def genFhirBenchmarkObs(self,encounter_uuid,patient_uuid):
         report['result'].append({
                 'reference': "#" + obs_id
        })
+#    print(report)
     return(report)
