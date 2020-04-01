@@ -1,0 +1,31 @@
+#initialize
+mvn org.openmrs.maven.plugins:openmrs-sdk-maven-plugin:setup-sdk
+
+#delete an existing server
+mvn openmrs-sdk:delete
+
+
+#create a new server
+#mvn openmrs-sdk:setup
+#mvn openmrs-sdk:setup  -DserverId=kate -Ddistro=referenceapplication:2.7.0  -DdbUri=jdbc:mysql://localhost:3306/ann -DdbUser=root -DdbPassword=password -DjavaHome="/opt/jdk1.8.0_161"
+mvn openmrs-sdk:setup  -DserverId=ann -Dplatform=2.1.3  -DdbUri=jdbc:mysql://localhost:3306/ann -DdbUser=root -DdbPassword=password -DjavaHome="/opt/jdk1.8.0_161"
+
+#create a new project
+mvn openmrs-sdk:create-project
+
+#bring up a server
+mvn clean install openmrs-sdk:run
+
+
+
+
+#resources
+https://medium.com/@awatson1978/hl7-v2-to-fhir-interface-mapping-f83c6ecf6bee
+
+#special notes:
+mirthconnect only works with the official sun/oracle version of java
+
+
+
+#disable validation on import:
+validation.disable = true

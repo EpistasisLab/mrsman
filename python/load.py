@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from neo4jrestclient import client
 from neo4jrestclient.client import GraphDatabase
-db = GraphDatabase("http://localhost:7474", username="neo4j", password="password")
+db = GraphDatabase("http://localhost:7474", username="neo4j", password="neo4j")
 import pandas as pd
  
 observations = pd.read_pickle('observations.pkl')
